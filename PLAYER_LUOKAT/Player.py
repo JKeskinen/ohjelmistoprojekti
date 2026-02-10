@@ -12,7 +12,7 @@ class Player(pygame.sprite.Sprite):
         self.input = PlayerInput()
         self.animation = PlayerAnimation(scale_factor)
         self.weapons = PlayerWeapons(scale_factor)
-        self.attack_offset_distance = 3
+        self.attack_offset_distance = 28
 
         liike_frames = frames if frames else [pygame.Surface((32, 32), pygame.SRCALPHA)]
         self.animaatio = {
