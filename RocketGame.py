@@ -2,7 +2,7 @@ import sys
 import os
 import pygame
 import random
-from player import Player
+#from player import Player
 from enemy import StraightEnemy, CircleEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
