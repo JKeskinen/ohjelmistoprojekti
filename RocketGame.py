@@ -7,7 +7,18 @@ from enemy import StraightEnemy, CircleEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
 from PLAYER_LUOKAT.Player import Player
+from MainMenu import MainMenu
 
+
+# Näytä päävalikko ensin
+pygame.init()
+menu = MainMenu()
+result = menu.run()
+
+# Jos käyttäjä valitsi QUIT, lopeta
+if result != "start_game":
+    pygame.quit()
+    sys.exit()
 
 currentWorkDir = os.getcwd()
 print(currentWorkDir)
@@ -109,6 +120,11 @@ player_scale_multiplier = 10
 player_scale_factor = 0.5  # Skaalaa pelaaja puoleen kokoon
 player = Player(player_scale_factor, frames, player_start_x, player_start_y, boost_frames=boost_frames)
 
+# Pelaajan elämät
+lives = 3
+enemy_hit_cooldown = 0
+enemy_hit_cooldown_duration = 1000  # 1 sekunti (millisekuntia)
+
 # Kello frameratea ja animaatiota varten
 clock = pygame.time.Clock()
 
@@ -116,11 +132,15 @@ clock = pygame.time.Clock()
 camera_x = 0
 camera_y = 0
 run = True
+pause = False
 while run:
     # Tapahtumien käsittely
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pause = True
     # rajoita framerate ja hae dt (millisekunteina)
     dt = clock.tick(60)
 
@@ -149,6 +169,34 @@ while run:
     for e in enemies:
         e.update(dt, player, world_rect)
 
+    # Tarkista osumat pelaajaammuksien ja vihollisten välillä
+    for bullet in list(player.weapons.bullets):
+        for enemy in list(enemies):
+            if bullet.rect.colliderect(enemy.rect):
+                # Ammuksen osuessa viholliseen, tuhotaan vihollinen
+                if bullet in player.weapons.bullets:
+                    player.weapons.bullets.remove(bullet)
+                if enemy in enemies:
+                    enemies.remove(enemy)
+                    pistejarjestelma.lisaa_piste(1)  # Lisää pisteet vihollisen tuhosta
+                break  # Siirry seuraavaan ammuskseen kun tämä osui
+
+    # Tarkista osumat vihollisten ja pelaajan välillä
+    if enemy_hit_cooldown <= 0:
+        for enemy in enemies:
+            if player.rect.colliderect(enemy.rect):
+                lives -= 1
+                enemy_hit_cooldown = enemy_hit_cooldown_duration
+                break  # Vain yksi osumistapahtuma per cooldown
+
+    # Päivitä cooldown
+    if enemy_hit_cooldown > 0:
+        enemy_hit_cooldown -= dt
+
+    # Tarkista pelin loppu
+    if lives <= 0:
+        run = False
+
     for e in enemies:
         e.draw(screen, camera_x, camera_y)
 
@@ -159,6 +207,62 @@ while run:
     # Näytä pisteet vasemmassa yläkulmassa.
     pistejarjestelma.show_score(10, 10, pygame.font.SysFont('Arial', 24), screen)
 
+    # Näytä elämät oikeassa yläkulmassa
+    font = pygame.font.SysFont('Arial', 24)
+    lives_text = font.render(f"Elämät: {lives}", True, (255, 255, 255))
+    screen.blit(lives_text, (X - 200, 10))
+
+    # Pause overlay
+    if pause:
+        overlay = pygame.Surface((X, Y))
+        overlay.set_alpha(180)
+        overlay.fill((30, 30, 30))
+        screen.blit(overlay, (0, 0))
+
+        font = pygame.font.SysFont('Arial', 48)
+        pause_text = font.render("PAUSE", True, (255, 255, 255))
+        screen.blit(pause_text, (X // 2 - 100, Y // 2 - 150))
+
+        button_font = pygame.font.SysFont('Arial', 36)
+        continue_btn = pygame.Rect(X // 2 - 120, Y // 2 - 50, 240, 60)
+        quit_btn = pygame.Rect(X // 2 - 120, Y // 2 + 30, 240, 60)
+        settings_btn = pygame.Rect(X // 2 - 120, Y // 2 + 110, 240, 60)
+
+        pygame.draw.rect(screen, (70, 150, 70), continue_btn)
+        pygame.draw.rect(screen, (150, 70, 70), quit_btn)
+        pygame.draw.rect(screen, (70, 70, 150), settings_btn)
+
+        screen.blit(button_font.render("Continue", True, (255,255,255)), (continue_btn.x+40, continue_btn.y+10))
+        screen.blit(button_font.render("Quit", True, (255,255,255)), (quit_btn.x+80, quit_btn.y+10))
+        screen.blit(button_font.render("Settings", True, (255,255,255)), (settings_btn.x+60, settings_btn.y+10))
+
+        pygame.display.update()
+
+        # Pause-tapahtumien käsittely
+        paused = True
+        while paused:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                    paused = False
+                    pause = False
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = pygame.mouse.get_pos()
+                    if continue_btn.collidepoint(mx, my):
+                        pause = False
+                        paused = False
+                    elif quit_btn.collidepoint(mx, my):
+                        run = False
+                        paused = False
+                        pause = False
+                    elif settings_btn.collidepoint(mx, my):
+                        # Avaa settings-näkymä tähän
+                        pass
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        pause = False
+                        paused = False
+        continue  # Älä suorita muuta pelisilmukkaa kun pause päällä
     # Päivitä näyttö
     pygame.display.update()
     
