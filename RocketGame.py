@@ -149,6 +149,18 @@ while run:
     for e in enemies:
         e.update(dt, player, world_rect)
 
+    # Tarkista osumat pelaajaammuksien ja vihollisten välillä
+    for bullet in list(player.weapons.bullets):
+        for enemy in list(enemies):
+            if bullet.rect.colliderect(enemy.rect):
+                # Ammuksen osuessa viholliseen, tuhotaan vihollinen
+                if bullet in player.weapons.bullets:
+                    player.weapons.bullets.remove(bullet)
+                if enemy in enemies:
+                    enemies.remove(enemy)
+                    pistejarjestelma.lisaa_piste(1)  # Lisää pisteet vihollisen tuhosta
+                break  # Siirry seuraavaan ammuskseen kun tämä osui
+
     for e in enemies:
         e.draw(screen, camera_x, camera_y)
 
