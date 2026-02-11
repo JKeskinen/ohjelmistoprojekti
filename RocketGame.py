@@ -4,7 +4,7 @@ import pygame
 import os
 import random
 from player import Player
-
+from enemy import StraightEnemy, CircleEnemy
 
 
 currentWorkDir = os.getcwd()
@@ -42,11 +42,36 @@ planeetat = [
 ]
 
 tausta_leveys, tausta_korkeus = tausta.get_width(), tausta.get_height()
+
+#  Viholliset: kuvat ja oliot 
+viholliset_path = os.path.join(os.path.dirname(__file__), "images", "viholliset")
+
+enemy_imgs = [
+    pygame.transform.scale(
+        pygame.image.load(os.path.join(viholliset_path, f)).convert_alpha(),
+        (64, 64)
+    )
+    for f in sorted(
+        [fn for fn in os.listdir(viholliset_path) if fn.lower().endswith(".png")],
+        key=lambda name: int(os.path.splitext(name)[0])  # "1.png" -> 1
+    )
+]
+
+world_rect = pygame.Rect(0, 0, tausta_leveys, tausta_korkeus)
+
+enemies = []
+enemies.append(StraightEnemy(enemy_imgs[0], 200, 200, speed=220))
+enemies.append(CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
+                           radius=180, angular_speed=2.2))
+
+
 planeetta_paikat = []
 for _ in range(len(planeetat)):
     x = random.randint(0, max(0, tausta_leveys - 300))
     y = random.randint(0, max(0, tausta_korkeus - 300))
     planeetta_paikat.append((x, y))
+
+
 
 # -----------------------------
 # Pelaajan (Player) lataus ja asetukset
@@ -115,6 +140,14 @@ while run:
     # Piirrä planeetat kameran offsetilla
     for kuva, (x, y) in zip(planeetat, planeetta_paikat):
         screen.blit(kuva, (x - camera_x, y - camera_y))
+        
+    # Piirrä viholliset
+    for e in enemies:
+        e.update(dt, player, world_rect)
+
+    for e in enemies:
+        e.draw(screen, camera_x, camera_y)
+
 
     # Piirrä pelaaja kameran suhteessa
     player.draw(screen, camera_x, camera_y)
