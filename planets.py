@@ -14,7 +14,7 @@ _rot_speed = 36.0
 
 
 def init_planet(project_root=None, filename=None, height=96, rot_speed_deg=36.0):
-    global _sprite_base, _rot_speed, _angle
+    global _sprite_base, _sprite_orig, _rot_speed, _angle
     _angle = 0.0
     _rot_speed = float(rot_speed_deg)
     if project_root is None:
@@ -46,6 +46,7 @@ def init_planet(project_root=None, filename=None, height=96, rot_speed_deg=36.0)
         _sprite_base = surf
     except Exception:
         _sprite_base = None
+        _sprite_orig = None
 
 
 def update_planet(dt_ms):

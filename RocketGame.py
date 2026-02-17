@@ -272,7 +272,8 @@ while run:
     # Draw a large rotating decorative planet always visible (screen coords)
     try:
         # centered near top-middle; change values if you want different position
-        planets.draw_planet_screen(screen, X // 2, 140, height=3200, gap=0)
+        # use a reasonable height so the planet is visible on-screen
+        planets.draw_planet_screen(screen, X // 2, 140, height=320, gap=0)
     except Exception:
         pass
 
