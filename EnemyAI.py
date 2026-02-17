@@ -46,6 +46,12 @@ class StraightEnemy(Enemy):
         self._change_interval_min = 400
         self._change_interval_max = 1200
         self._change_interval = random.randint(self._change_interval_min, self._change_interval_max)
+        # simple bounce settings: when colliding with world bounds, perform a short bounce
+        self.simple_bounce = True
+        self.bouncing = False
+        self.bounce_duration = 0.5  # seconds
+        self.bounce_timer = 0.0
+        self.bounce_initial_vel = pygame.Vector2(0, 0)
         # gravity / attraction settings
         self.gravity_enabled = False
         self.gravity_center = pygame.Vector2(0, 0)
@@ -192,46 +198,87 @@ class StraightEnemy(Enemy):
                 collided_sides.append('bottom')
 
             if collided_sides:
-                # compute inward normal (sum of side normals)
-                normal = pygame.Vector2(0, 0)
-                if 'left' in collided_sides:
-                    normal += pygame.Vector2(1, 0)
-                if 'right' in collided_sides:
-                    normal += pygame.Vector2(-1, 0)
-                if 'top' in collided_sides:
-                    normal += pygame.Vector2(0, 1)
-                if 'bottom' in collided_sides:
-                    normal += pygame.Vector2(0, -1)
-                if normal.length_squared() == 0:
-                    normal = pygame.Vector2(1, 0)
-                normal = normal.normalize()
+                # Compute penetration depth per side (positive values indicate overlap amount)
+                overlap_left = max(0, world_rect.left - self.rect.left)
+                overlap_right = max(0, self.rect.right - world_rect.right)
+                overlap_top = max(0, world_rect.top - self.rect.top)
+                overlap_bottom = max(0, self.rect.bottom - world_rect.bottom)
 
-                # reflect velocity around the normal, then add a small random tangential offset
-                v = pygame.Vector2(self.vel)
-                refl = v - 2 * v.dot(normal) * normal
-                base_angle = math.atan2(refl.y, refl.x)
-                jitter = random.uniform(-math.pi / 6, math.pi / 6)
-                angle = base_angle + jitter
-                speed = max(self.speed * 0.6, v.length() or self.speed)
-                self.vel.x = math.cos(angle) * speed
-                self.vel.y = math.sin(angle) * speed
+                # Choose dominant penetration to determine collision normal
+                overlaps = {
+                    'left': overlap_left,
+                    'right': overlap_right,
+                    'top': overlap_top,
+                    'bottom': overlap_bottom,
+                }
+                side = max(overlaps, key=overlaps.get)
+                pen = overlaps[side]
+                if pen <= 0:
+                    # fallback: compute summed normal
+                    normal = pygame.Vector2(0, 0)
+                    if 'left' in collided_sides:
+                        normal += pygame.Vector2(1, 0)
+                    if 'right' in collided_sides:
+                        normal += pygame.Vector2(-1, 0)
+                    if 'top' in collided_sides:
+                        normal += pygame.Vector2(0, 1)
+                    if 'bottom' in collided_sides:
+                        normal += pygame.Vector2(0, -1)
+                    if normal.length_squared() == 0:
+                        normal = pygame.Vector2(1, 0)
+                    normal = normal.normalize()
+                    sep = 8
+                else:
+                    if side == 'left':
+                        normal = pygame.Vector2(1, 0)
+                    elif side == 'right':
+                        normal = pygame.Vector2(-1, 0)
+                    elif side == 'top':
+                        normal = pygame.Vector2(0, 1)
+                    else:
+                        normal = pygame.Vector2(0, -1)
+                    sep = pen + 1.0
 
-                # move slightly inward to prevent immediate re-collision
+                # Separate out of collision along normal
                 try:
-                    self.pos += normal * 8
+                    self.pos += normal * sep
                 except Exception:
                     pass
                 self.rect.center = (int(self.pos.x), int(self.pos.y))
 
-                # if velocity is tiny after collision, give a stronger nudge inward
-                if abs(self.vel.x) < 1.0 and ('left' in collided_sides or 'right' in collided_sides):
-                    self.pos += normal * 12
-                    self.vel = normal * (self.speed * 0.8)
-                    self.rect.center = (int(self.pos.x), int(self.pos.y))
-                if abs(self.vel.y) < 1.0 and ('top' in collided_sides or 'bottom' in collided_sides):
-                    self.pos += normal * 12
-                    self.vel = normal * (self.speed * 0.8)
-                    self.rect.center = (int(self.pos.x), int(self.pos.y))
+                # Simple short bounce: reverse direction and decay to zero over bounce_duration
+                if getattr(self, 'simple_bounce', True):
+                    v = pygame.Vector2(self.vel)
+                    # initial bounce velocity: reverse direction, scale down a bit
+                    self.bouncing = True
+                    self.bounce_timer = float(self.bounce_duration)
+                    self.bounce_initial_vel = -v * 0.8
+                    # immediately apply initial bounce velocity
+                    self.vel = pygame.Vector2(self.bounce_initial_vel)
+                    self.vx, self.vy = float(self.vel.x), float(self.vel.y)
+                else:
+                    # Physically based reflection: v' = v - (1 + e) (v·n) n
+                    e = getattr(self, 'wall_restitution', 0.45)  # 0..1 (0 = inelastic, 1 = elastic)
+                    mu = getattr(self, 'wall_friction', 0.28)    # tangential damping fraction
+                    v = pygame.Vector2(self.vel)
+                    vn = v.dot(normal)
+                    v_normal = vn * normal
+                    v_tangent = v - v_normal
+
+                    # New normal component (reversed with restitution)
+                    new_v_normal = - (1.0 + e) * v_normal
+                    # Apply tangential friction (reduce tangential speed)
+                    new_v_tangent = v_tangent * max(0.0, 1.0 - mu)
+
+                    new_v = new_v_normal + new_v_tangent
+
+                    # If new velocity is nearly zero, nudge along normal to avoid sticking
+                    if new_v.length_squared() < 1.0:
+                        new_v = normal * (self.speed * 0.6)
+
+                    self.vel = new_v
+                    # keep legacy vx/vy in sync
+                    self.vx, self.vy = float(self.vel.x), float(self.vel.y)
 
             # ensure rect stays inside world
             self.rect.clamp_ip(world_rect)

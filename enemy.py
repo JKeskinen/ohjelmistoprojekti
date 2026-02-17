@@ -11,6 +11,25 @@ class Enemy(pygame.sprite.Sprite):
     def update(self, dt_ms: int, player=None, world_rect: pygame.Rect | None = None):
         pass
 
+    def _update_display_angle(self, dt_ms: int, target: float, max_deg_per_sec: float = 720.0):
+        """Smoothly rotate a `display_angle` attribute toward `target`.
+
+        - `target` is in radians (math.atan2 convention used in codebase).
+        - `max_deg_per_sec` limits rotation speed to avoid snaps.
+        """
+        try:
+            curr = float(getattr(self, 'display_angle', 0.0))
+        except Exception:
+            curr = 0.0
+        # normalize difference to [-pi, pi]
+        diff = (target - curr + math.pi) % (2.0 * math.pi) - math.pi
+        max_change = math.radians(max_deg_per_sec) * (dt_ms / 1000.0)
+        if abs(diff) <= max_change:
+            new = target
+        else:
+            new = curr + (max_change if diff > 0 else -max_change)
+        self.display_angle = new
+
     def draw(self, screen: pygame.Surface, camera_x: int, camera_y: int):
         screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
 

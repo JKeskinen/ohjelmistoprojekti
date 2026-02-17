@@ -43,15 +43,28 @@ class Player(pygame.sprite.Sprite):
 
         # Attack animation
         self.attack_frames = []
-        project_root = os.path.dirname(os.path.dirname(__file__))
-        attack_paths = [
-            os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Attack_1', '000_attack_1_0.png'),
-            os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Attack_1', '001_attack_1_1.png'),
-            os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Attack_1', '002_attack_1_2.png'),
-            os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Attack_1', '003_attack_1_3.png'),
-        ]
-        for path in attack_paths:
-            img = pygame.image.load(path).convert_alpha()
+
+        def find_project_root(start_path):
+            d = os.path.dirname(os.path.abspath(start_path))
+            while True:
+                if os.path.isdir(os.path.join(d, 'alukset')):
+                    return d
+                parent = os.path.dirname(d)
+                if parent == d:
+                    return os.path.dirname(os.path.abspath(start_path))
+                d = parent
+
+        project_root = find_project_root(__file__)
+
+        # Use actual filenames from repository (capitalization preserved)
+        attack_files = ['000_Attack_1_0.png', '001_Attack_1_1.png', '002_Attack_1_2.png', '003_Attack_1_3.png']
+        attack_dir = os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Attack_1')
+        for fname in attack_files:
+            path = os.path.join(attack_dir, fname)
+            try:
+                img = pygame.image.load(path).convert_alpha()
+            except Exception:
+                continue
             w = max(1, int(img.get_width() * self.scale_factor))
             h = max(1, int(img.get_height() * self.scale_factor))
             self.attack_frames.append(pygame.transform.scale(img, (w, h)))
@@ -68,14 +81,18 @@ class Player(pygame.sprite.Sprite):
         self.damage_sprites = []
         self.damage_sprite_names = []
         damage_dir = os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Damage')
-        damage_files = sorted([f for f in os.listdir(damage_dir) if f.lower().endswith('.png')])
-        for fname in damage_files:
-            path = os.path.join(damage_dir, fname)
-            img = pygame.image.load(path).convert_alpha()
-            w = max(1, int(img.get_width() * self.scale_factor))
-            h = max(1, int(img.get_height() * self.scale_factor))
-            self.damage_sprites.append(pygame.transform.scale(img, (w, h)))
-            self.damage_sprite_names.append(fname)
+        if os.path.isdir(damage_dir):
+            damage_files = sorted([f for f in os.listdir(damage_dir) if f.lower().endswith('.png')])
+            for fname in damage_files:
+                path = os.path.join(damage_dir, fname)
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                except Exception:
+                    continue
+                w = max(1, int(img.get_width() * self.scale_factor))
+                h = max(1, int(img.get_height() * self.scale_factor))
+                self.damage_sprites.append(pygame.transform.scale(img, (w, h)))
+                self.damage_sprite_names.append(fname)
 
 
     def update(self, dt):
