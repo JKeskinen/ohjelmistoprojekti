@@ -50,3 +50,29 @@ Komennolla `git pull --rebase` saa päivitettyä repon ajantasalle, mutta forkat
 	```sh
 	git push origin main
 	```
+
+#### Jos tulee rabsen kanssa ongelmia
+
+1. Korjaa "Ghost-rebase" ongelma:
+	```sh
+	git rebase --abort
+	```
+2. Jos ei toimi, niin suorita tämän:
+	```sh
+	rm -r -fo .git\rebase-merge
+	```
+3. Yritä uudestaan:
+	```sh
+	git status
+	```
+4. Jos: 
+	```sh
+	On branch main
+	Your branch is up to date with 'origin/main'.
+	
+	nothing to commit, working tree clean
+	```
+5. Niin pitäisi onnistua:
+	```sh
+	git rebase upstream/main
+	```
