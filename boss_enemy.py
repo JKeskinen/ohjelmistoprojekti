@@ -13,6 +13,7 @@ class BossEnemy(Enemy):
 
         self.world_rect = world_rect
         self.hp = hp
+        self.max_hp = hp
 
         self.enter_speed = enter_speed
         self.move_speed = move_speed
