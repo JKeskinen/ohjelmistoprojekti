@@ -8,7 +8,7 @@ from points import Points
 sys.path.append(os.path.dirname(__file__))
 from PLAYER_LUOKAT.Player import Player
 from MainMenu import MainMenu
-
+from gameOver import GameOverScreen
 
 # Näytä päävalikko ensin
 pygame.init()
@@ -128,6 +128,9 @@ enemy_hit_cooldown_duration = 1000  # 1 sekunti (millisekuntia)
 # Kello frameratea ja animaatiota varten
 clock = pygame.time.Clock()
 
+# Luodaan Game Over -näyttöolio.
+game_over_screen = GameOverScreen(screen)
+
 # Alusta kamera ennen silmukkaa
 camera_x = 0
 camera_y = 0
@@ -195,7 +198,36 @@ while run:
 
     # Tarkista pelin loppu
     if lives <= 0:
-        run = False
+        game_over_screen.show(X, Y)
+        game_over = game_over_screen.run()
+        if game_over == "play_again":
+            # Nollataan peli (pelaaja, viholliset, pisteet, elämät).
+            # Pelaaja takaisin keskelle, viholliset uudestaan, pisteet nollaan, elämiä 3.
+            player.rect.center = (player_start_x, player_start_y)
+            enemies = [
+                StraightEnemy(enemy_imgs[0], 200, 200, speed=220),
+                CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
+                            radius=180, angular_speed=2.2)
+            ]
+            lives = 3
+            pistejarjestelma.score = 0
+        elif game_over == "main_menu":
+            # Näytetään päävalikko uudestaan.
+            menu = MainMenu()
+            result = menu.run()
+            if result != "start_game":
+                run = False
+            # Nollataan peli päävalikkoon palattaessa.
+            player.rect.center = (player_start_x, player_start_y)
+            enemies = [
+                StraightEnemy(enemy_imgs[0], 200, 200, speed=220),
+                CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
+                            radius=180, angular_speed=2.2)
+            ]
+            lives = 3
+            pistejarjestelma.score = 0
+        elif game_over == "quit":
+            run = False
 
     for e in enemies:
         e.draw(screen, camera_x, camera_y)
