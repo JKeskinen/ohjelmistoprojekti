@@ -239,6 +239,8 @@ class Player2(pygame.sprite.Sprite):
 
         self.hit_anim_timer = 0
         self.hit_anim_duration = 200
+        # Hurt-flag: näyttää Damage/Hurt-overlay kun True
+        self.hurt_flag = False
 
         # attack frames (jos niitä ei löytynyt aiemmin, varmistetaan kentät)
         self.attack_frames = getattr(self, 'attack_frames', [])
@@ -291,6 +293,7 @@ class Player2(pygame.sprite.Sprite):
             self.hit_anim_timer -= dt
             if self.hit_anim_timer < 0:
                 self.hit_anim_timer = 0
+                self.hurt_flag = False
         if self.input.hit:
             self.trigger_hit_animation()
 
@@ -459,6 +462,20 @@ class Player2(pygame.sprite.Sprite):
         rot_rect = rotated.get_rect(center=(self.pos.x - cam_x, self.pos.y - cam_y))
         screen.blit(rotated, rot_rect.topleft)
 
+        # Piirrä hurt-overlay jos osuma tapahtunut äskettäin
+        if getattr(self, 'hurt_flag', False) and getattr(self, 'hurt_frames', None):
+            frames = self.hurt_frames
+            if frames:
+                frame_count = len(frames)
+                if self.hit_anim_duration > 0 and frame_count > 0:
+                    prog = 1.0 - (self.hit_anim_timer / float(self.hit_anim_duration))
+                    idx = int(prog * frame_count)
+                    idx = max(0, min(frame_count - 1, idx))
+                    dmg = frames[idx]
+                    dmg_rot = pygame.transform.rotate(dmg, -self.angle)
+                    dmg_rect = dmg_rot.get_rect(center=(self.pos.x - cam_x, self.pos.y - cam_y))
+                    screen.blit(dmg_rot, dmg_rect.topleft)
+
         for bullet in self.weapons.bullets:
             screen.blit(bullet.image, (bullet.rect.x - cam_x, bullet.rect.y - cam_y))
 
@@ -473,3 +490,4 @@ class Player2(pygame.sprite.Sprite):
 
     def trigger_hit_animation(self):
         self.hit_anim_timer = self.hit_anim_duration
+        self.hurt_flag = True

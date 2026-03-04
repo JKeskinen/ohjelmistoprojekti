@@ -665,6 +665,9 @@ while run:
         for enemy in list(enemies):
             if bullet.rect.colliderect(enemy.rect):
 
+                # Muistetaan osumakohta: käytä ammusten rectin keskusta
+                impact_pos = bullet.rect.center
+
                 # Poista ammus
                 if bullet in player.weapons.bullets:
                     player.weapons.bullets.remove(bullet)
@@ -673,7 +676,7 @@ while run:
                 if isinstance(enemy, BossEnemy):
                     died = enemy.take_hit(1)
                     if died:
-                        # Prefer boss-specific frames, else generic
+                        # Bossin tuhoutumisessa pidetään suurempi boss-animaatio keskustassa
                         if explosion_manager.frames_by_type.get('boss'):
                             explosion_manager.spawn_boss(enemy.rect.center, fps=24)
                         elif explosion_manager.frames:
@@ -681,12 +684,19 @@ while run:
 
                         enemies.remove(enemy)
                         pistejarjestelma.lisaa_piste(5)
+                    else:
+                        # Pieni osumatehoste spawnataan siihen kohtaan, mihin ammus osui
+                        if explosion_manager.frames_by_type.get('enemy'):
+                            explosion_manager.spawn_enemy(impact_pos, fps=24)
+                        elif explosion_manager.frames:
+                            explosion_manager.spawn(impact_pos, fps=24)
                 else:
                     # Normaali vihollinen kuolee heti -> spawn enemy or generic explosion
+                    # Spawnataan animaatio siihen kohtaan, mihin ammus osui (impact_pos)
                     if explosion_manager.frames_by_type.get('enemy'):
-                        explosion_manager.spawn_enemy(enemy.rect.center, fps=24)
+                        explosion_manager.spawn_enemy(impact_pos, fps=24)
                     elif explosion_manager.frames:
-                        explosion_manager.spawn(enemy.rect.center, fps=24)
+                        explosion_manager.spawn(impact_pos, fps=24)
 
                     enemies.remove(enemy)
                     pistejarjestelma.lisaa_piste(1)
@@ -884,6 +894,12 @@ while run:
                     if hasattr(player, 'health'):
                         player.health = max(0, int(player.health) - 1)
                         lives = player.health
+                        # Aktivoi pelaajan Hurt-animaatio (visuaalinen palaute osumasta)
+                        try:
+                            if hasattr(player, 'trigger_hit_animation'):
+                                player.trigger_hit_animation()
+                        except Exception:
+                            pass
                     else:
                         lives -= 1
                 except Exception:
@@ -968,6 +984,12 @@ while run:
             if hasattr(player, 'health'):
                 player.health = max(0, int(player.health) - 1)
                 lives = player.health
+                # Aktivoi pelaajan Hurt-animaatio (visuaalinen palaute osumasta)
+                try:
+                    if hasattr(player, 'trigger_hit_animation'):
+                        player.trigger_hit_animation()
+                except Exception:
+                    pass
             else:
                 lives -= 1
             continue

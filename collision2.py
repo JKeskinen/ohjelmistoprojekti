@@ -126,6 +126,11 @@ def simple_player_enemy_begin(player_ent, enemy_ent, arbiter, space, data):
     try:
         if hasattr(player_ent, 'health'):
             player_ent.health = max(0, int(player_ent.health) - 1)
+            try:
+                if hasattr(player_ent, 'trigger_hit_animation'):
+                    player_ent.trigger_hit_animation()
+            except Exception:
+                pass
         # Optionally mark enemy for removal
         if enemy_ent is not None:
             # remove body/shape via manager stored in data

@@ -43,6 +43,11 @@ class Damage:
             # Tarkistetaan kuolema
             if player.damage.is_dead():
                 print("Pelaaja kuoli")
+            try:
+                if hasattr(player, 'trigger_hit_animation'):
+                    player.trigger_hit_animation()
+            except Exception:
+                pass
 
     def collision_from_meteor(meteor_group, player):
         # Meteoriittiä ei voi tuhota
@@ -50,4 +55,9 @@ class Damage:
         # Pelaaja ei ota uutta damagea 3 sekunnin aikana
         if pygame.sprite.spritecollide(player, meteor_group, False):
             player.damage.take_damage(1)
+            try:
+                if hasattr(player, 'trigger_hit_animation'):
+                    player.trigger_hit_animation()
+            except Exception:
+                pass
 

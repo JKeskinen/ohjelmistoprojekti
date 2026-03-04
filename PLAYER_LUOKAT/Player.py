@@ -81,6 +81,11 @@ class Player(pygame.sprite.Sprite):
         self.hit_anim_timer = 0
         self.hit_anim_duration = 200
         self.hit_flash_color = (255, 80, 80)
+        # Hurt-flag: yksinkertainen boolean, joka kertoo, näytetäänkö
+        # Damage/Hurt-overlay piirrossyklissä. Käytetään yhdessä
+        # `hit_anim_timer`-ajastimen kanssa, jotta tila on helposti
+        # tarkistettavissa muista moduuleista ja piirrosssa.
+        self.hurt_flag = False
 
         # Vahinko-animaatio
         self.damage_sprites = []
@@ -94,6 +99,20 @@ class Player(pygame.sprite.Sprite):
                 if os.path.isdir(cand_dir):
                     damage_dir = cand_dir
                     break
+        # Jos ei löytynyt tutkitaan myös alukset -kansion juuritasoa (esim. alukset/FIGHTER-SPRITES/Hurt)
+        if not damage_dir:
+            alukset_root = os.path.join(project_root, 'alukset')
+            if os.path.isdir(alukset_root):
+                for candidate in sorted(os.listdir(alukset_root)):
+                    # etsi joko 'Damage' tai 'Hurt' alikansiosta
+                    cand_dir = os.path.join(alukset_root, candidate, 'Damage')
+                    cand_dir2 = os.path.join(alukset_root, candidate, 'Hurt')
+                    if os.path.isdir(cand_dir):
+                        damage_dir = cand_dir
+                        break
+                    if os.path.isdir(cand_dir2):
+                        damage_dir = cand_dir2
+                        break
         if damage_dir:
             damage_files = sorted([f for f in os.listdir(damage_dir) if f.lower().endswith('.png')])
             for fname in damage_files:
@@ -128,7 +147,9 @@ class Player(pygame.sprite.Sprite):
         if self.hit_anim_timer > 0:
             self.hit_anim_timer -= dt
             if self.hit_anim_timer < 0:
+                # Ajastin päättynyt -> sammuta hurt-flag myös
                 self.hit_anim_timer = 0
+                self.hurt_flag = False
         if self.input.hit:
             self.trigger_hit_animation()
 
@@ -196,15 +217,30 @@ class Player(pygame.sprite.Sprite):
     def draw(self, screen, cam_x, cam_y):
         if self.is_destroyed and self.destroyed_sprites:
             destroyed_sprite = self.destroyed_sprites[self.destroyed_frame_index]
-            destroyed_rect = destroyed_sprite.get_rect(center=(self.pos.x - cam_x, self.pos.y - cam_y))
+            destroyed_rect = destroyed_sprite.get_rect(center=(self.rect.centerx - cam_x, self.rect.centery - cam_y))
             screen.blit(destroyed_sprite, destroyed_rect.topleft)
             return
 
-        # Piirrä pelaajan sprite
-        rotated = pygame.transform.rotate(self.image, -self.angle)
-        rot_rect = rotated.get_rect(center=(self.pos.x - cam_x, self.pos.y - cam_y))
-        screen.blit(rotated, rot_rect.topleft)
+        # Keskitetään piirto rectin mukaan (varmistaa yhdenmukaisen sijoittelun)
+        base_center = (self.rect.centerx - cam_x, self.rect.centery - cam_y)
 
+        # Piirrä vahinko/hurt -animaatio päälle, jos `hurt_flag` on asetettu.
+        # Jos hurt-flag on päällä, älä piirrä alempaa (perus)spriteä.
+        if self.hurt_flag and self.damage_sprites:
+            frame_count = len(self.damage_sprites)
+            if self.hit_anim_duration > 0 and frame_count > 0:
+                prog = 1.0 - (self.hit_anim_timer / float(self.hit_anim_duration))
+                idx = int(prog * frame_count)
+                idx = max(0, min(frame_count - 1, idx))
+                damage_sprite = self.damage_sprites[idx]
+                damage_rotated = pygame.transform.rotate(damage_sprite, -self.angle)
+                dmg_rect = damage_rotated.get_rect(center=base_center)
+                screen.blit(damage_rotated, dmg_rect.topleft)
+        else:
+            # Piirrä pelaajan sprite (vain jos ei hurt-overlayia)
+            rotated = pygame.transform.rotate(self.image, -self.angle)
+            rot_rect = rotated.get_rect(center=base_center)
+            screen.blit(rotated, rot_rect.topleft)
         # Piirrä aseiden ammukset
         for bullet in self.weapons.bullets:
             screen.blit(bullet.image, (bullet.rect.x - cam_x, bullet.rect.y - cam_y))
@@ -216,9 +252,12 @@ class Player(pygame.sprite.Sprite):
             rad = math.radians(self.angle)
             offset_x = math.cos(rad) * self.attack_offset_distance
             offset_y = math.sin(rad) * self.attack_offset_distance
-            attack_center = (self.pos.x - cam_x + offset_x, self.pos.y - cam_y + offset_y)
+            attack_center = (base_center[0] + offset_x, base_center[1] + offset_y)
             attack_rect = attack_rotated.get_rect(center=attack_center)
             screen.blit(attack_rotated, attack_rect.topleft)
 
     def trigger_hit_animation(self):
+        # Aseta ajastin ja merkkaa hurt-flag True, jolloin piirrossykli
+        # näyttää Damage/Hurt-kehyksen välittömästi.
         self.hit_anim_timer = self.hit_anim_duration
+        self.hurt_flag = True
