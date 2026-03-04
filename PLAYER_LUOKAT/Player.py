@@ -20,8 +20,12 @@ class Player(pygame.sprite.Sprite):
         self.attack_offset_distance = 3 # asetettu 0.5 scalefactorille RocketGame.py(scale_factor=0.5) 
 
         liike_frames = frames if frames else [pygame.Surface((32, 32), pygame.SRCALPHA)]
+        scaled_move = self.animation.scale_frames(liike_frames)
+        # idle: prefer a dedicated Idle frame set, otherwise use first frame of move
+        idle_frames = [scaled_move[0]] if scaled_move else [pygame.Surface((32, 32), pygame.SRCALPHA)]
         self.animaatio = {
-            'move': self.animation.scale_frames(liike_frames),
+            'idle': idle_frames,
+            'move': scaled_move,
             'boost': self.animation.scale_frames(boost_frames) if boost_frames else []
         }
         self.frame_index = 0
@@ -86,6 +90,8 @@ class Player(pygame.sprite.Sprite):
         # `hit_anim_timer`-ajastimen kanssa, jotta tila on helposti
         # tarkistettavissa muista moduuleista ja piirrosssa.
         self.hurt_flag = False
+        # Hurt animation frame speed (milliseconds per hurt-frame)
+        self.hurt_frame_speed = 40
 
         # Vahinko-animaatio
         self.damage_sprites = []
@@ -166,7 +172,13 @@ class Player(pygame.sprite.Sprite):
             self.attack_anim_timer = 0
 
     def handle_animation(self, dt):
-        new_anim = 'boost' if (self.input.moveUp and self.animaatio.get('boost')) else 'move'
+        # Choose animation state: idle when not thrusting, move/fly when thrusting,
+        # boost when thrusting and boost frames available.
+        if self.input.moveUp:
+            new_anim = 'boost' if self.animaatio.get('boost') else 'move'
+        else:
+            new_anim = 'idle'
+
         if new_anim != self.current_anim:
             self.current_anim = new_anim
             self.frame_index = 0
@@ -228,9 +240,10 @@ class Player(pygame.sprite.Sprite):
         # Jos hurt-flag on päällä, älä piirrä alempaa (perus)spriteä.
         if self.hurt_flag and self.damage_sprites:
             frame_count = len(self.damage_sprites)
-            if self.hit_anim_duration > 0 and frame_count > 0:
-                prog = 1.0 - (self.hit_anim_timer / float(self.hit_anim_duration))
-                idx = int(prog * frame_count)
+            if frame_count > 0:
+                # compute elapsed time since hurt animation started
+                elapsed = self.hit_anim_duration - self.hit_anim_timer
+                idx = int(elapsed / max(1, self.hurt_frame_speed))
                 idx = max(0, min(frame_count - 1, idx))
                 damage_sprite = self.damage_sprites[idx]
                 damage_rotated = pygame.transform.rotate(damage_sprite, -self.angle)
