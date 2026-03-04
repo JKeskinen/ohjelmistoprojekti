@@ -165,11 +165,22 @@ class Enemy(pygame.sprite.Sprite):
                 r = surf.get_rect(center=(self.rect.centerx - camera_x, self.rect.centery - camera_y))
                 screen.blit(surf, r.topleft)
             else:
-                # Ei merkittävää rotaatiota -> piirtä suoraan
-                screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
+                # Ei merkittävää rotaatiota -> piirrä kuva siten, että
+                # kuva on keskitetty `self.rect.center` koordinaattiin.
+                # Tämä varmistaa, että jos `rect` on muutettu (esim. hitbox
+                # override), visuaalinen sprite pysyy keskitettynä hitboxiin.
+                img_r = self.image.get_rect(center=(self.rect.centerx - camera_x,
+                                                    self.rect.centery - camera_y))
+                screen.blit(self.image, img_r.topleft)
         except Exception:
-            # Piirrä varmistus, jos rotaatio epäonnistuu
-            screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
+            # Piirrä varmistus, jos rotaatio tai edellinen logiikka epäonnistuu
+            try:
+                img_r = self.image.get_rect(center=(self.rect.centerx - camera_x,
+                                                    self.rect.centery - camera_y))
+                screen.blit(self.image, img_r.topleft)
+            except Exception:
+                # Viimeinen varmistus: fallback vanhaan tapaan
+                screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
 
 
 class StraightEnemy(Enemy):

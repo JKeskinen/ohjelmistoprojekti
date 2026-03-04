@@ -59,26 +59,37 @@ HEALTH_ICON_POS = (X - HEALTH_ICON_SCALE_SIZE[0] - HEALTH_ICON_MARGIN, HEALTH_IC
 
 screen = pygame.display.set_mode((X,Y))
 
-# Hitbox override: set to (W, H) to force rectangle size, or None to use sprite size
-# Example: HITBOX_SIZE = (48, 48)
-HITBOX_SIZE = (48,48)
+# Hitbox override per entity type: set to (W, H) to force rectangle size,
+# or None to use the sprite's intrinsic rect size. These three settings
+# allow independent tuning for player, generic enemies and boss.
+# Examples:
+#   HITBOX_SIZE_PLAYER = (48, 48)
+#   HITBOX_SIZE_ENEMY  = (56, 56)
+#   HITBOX_SIZE_BOSS   = (240, 240)
+HITBOX_SIZE_PLAYER = (64, 64)
+HITBOX_SIZE_ENEMY = (48, 48)
+HITBOX_SIZE_BOSS = (140, 140)
 
 
-def apply_hitbox(obj):
-    """Apply `HITBOX_SIZE` to object's rect while preserving center.
-    Also syncs `pos` attribute and updates collision_radius when possible.
-    If `HITBOX_SIZE` is None this is a no-op.
+def apply_hitbox(obj, size=None):
+    """Apply a hitbox `size=(w,h)` to object's rect while preserving center.
+
+    - `size` overrides the per-type globals when provided.
+    - If `size` is None, the function will do nothing.
+    - The function also synchronizes a `pos` attribute (if present) and
+      updates `collision_radius` based on the new rect dimensions.
     """
-    if HITBOX_SIZE is None:
+    if size is None:
         return
     try:
         c = obj.rect.center
-        w, h = int(HITBOX_SIZE[0]), int(HITBOX_SIZE[1])
+        w, h = int(size[0]), int(size[1])
         obj.rect.size = (w, h)
         obj.rect.center = c
         if hasattr(obj, 'pos'):
             obj.pos = pygame.Vector2(obj.rect.center)
         try:
+            # keep compatibility with Enemy defaults (MIN_COLLISION_RADIUS etc.)
             obj.collision_radius = max(8, int(max(obj.rect.width, obj.rect.height) * 0.45))
         except Exception:
             pass
@@ -269,7 +280,7 @@ def spawn_wave(wave_num):
         except Exception:
             e1.collision_radius = 16
         enemies.append(e1)
-        apply_hitbox(e1)
+        apply_hitbox(e1, HITBOX_SIZE_ENEMY)
 
         e2 = CircleEnemy(img1, tausta_leveys // 2 + 300, tausta_korkeus // 2, radius=180, angular_speed=2.2)
         e2.exhaust_turbo = exhaust_turbo
@@ -280,7 +291,7 @@ def spawn_wave(wave_num):
         except Exception:
             e2.collision_radius = 16
         enemies.append(e2)
-        apply_hitbox(e2)
+        apply_hitbox(e2, HITBOX_SIZE_ENEMY)
     
     elif wave_num == 2:
         edges = ["right", "top", "left"]
@@ -300,9 +311,8 @@ def spawn_wave(wave_num):
             except Exception:
                 e.collision_radius = 16
             enemies.append(e)
-            apply_hitbox(e)
-            apply_hitbox(e)
-            apply_hitbox(e)
+            apply_hitbox(e, HITBOX_SIZE_ENEMY)
+            apply_hitbox(e, HITBOX_SIZE_ENEMY)
     
     elif wave_num == 3:
         # Wave 3: 5 enemies - 3 moving from top to bottom, 2 moving from bottom to top
@@ -318,6 +328,7 @@ def spawn_wave(wave_num):
             except Exception:
                 e.collision_radius = 16
             enemies.append(e)
+            apply_hitbox(e, HITBOX_SIZE_ENEMY)
         
         # 2 enemies moving up
         for i in range(2):
@@ -329,6 +340,7 @@ def spawn_wave(wave_num):
             except Exception:
                 e.collision_radius = 16
             enemies.append(e)
+            apply_hitbox(e, HITBOX_SIZE_ENEMY)
     
     elif wave_num == 4:
         # Wave 4: Boss enemy
@@ -337,14 +349,16 @@ def spawn_wave(wave_num):
             world_rect,
             hp=12,
             enter_speed=280,
-            move_speed=320
+            move_speed=320,
+            hitbox_size=HITBOX_SIZE_BOSS,
+            hitbox_offset=(0, 0),
         )
         try:
             boss.collision_radius = max(8, int(max(boss.rect.width, boss.rect.height) * 0.45))
         except Exception:
             boss.collision_radius = 64
         enemies.append(boss)
-        apply_hitbox(boss)
+        apply_hitbox(boss, HITBOX_SIZE_BOSS)
 
 # Spawn the first wave
 enemy_bullets = []
@@ -453,7 +467,7 @@ player_scale_factor = 1  # Skaalaa pelaajan sprite.
 # Käytä uutta `Player2`-luokkaa joka lataa spritet dynaamisesti
 try:
     player = Player2(player_ship, player_scale_factor, player_start_x, player_start_y, max_health=5)
-    apply_hitbox(player)
+    apply_hitbox(player, HITBOX_SIZE_PLAYER)
 except Exception as e:
     # Tulostetaan poikkeus syyksi, jotta tiedetään miksi Player2 epäonnistui
     import traceback
@@ -464,7 +478,7 @@ except Exception as e:
     frames = []
     boost_frames = []
     player = Player(player_scale_factor, frames, player_start_x, player_start_y, boost_frames=boost_frames, max_health=5)
-    apply_hitbox(player)
+    apply_hitbox(player, HITBOX_SIZE_PLAYER)
 
 # Debug: kerrotaan käytössä oleva pelaajaluokka ja skaala-arvot
 try:

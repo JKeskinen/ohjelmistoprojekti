@@ -218,7 +218,15 @@ class EnemyBullet(pygame.sprite.Sprite):
         except Exception:
             pass
 
-        screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
+        # Non-rotated fallback: center the image on rect.center so that any
+        # manual rect adjustments (hitbox overrides) keep the sprite visually
+        # aligned with its logical collision box.
+        try:
+            img_r = self.image.get_rect(center=(self.rect.centerx - camera_x,
+                                                self.rect.centery - camera_y))
+            screen.blit(self.image, img_r.topleft)
+        except Exception:
+            screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
 
 
 class Muzzle:

@@ -2,15 +2,49 @@ import pygame
 from Enemies.enemy import Enemy
 from ui import get_enemy_bar_images, draw_healthbar_custom
 
+# MODIFICATION NOTES:
+# 2026-03-04 - Added optional `hitbox_size` and `hitbox_offset` parameters
+# to `BossEnemy.__init__` so the collision rectangle can be tuned
+# independently of the visual sprite. This fixes cases where the visual
+# artwork is asymmetric or the sprite's pivot doesn't match the logical
+# collision center. Passing `hitbox_size=(w,h)` will resize the boss's
+# `rect` while preserving its center; `hitbox_offset=(dx,dy)` shifts the
+# rect relative to the sprite center. The code also defensively re-centers
+# the `rect` at spawn to ensure predictable placement.
+
 class BossEnemy(Enemy):
     def __init__(self, image: pygame.Surface, world_rect: pygame.Rect,
-                 hp: int = 10, enter_speed: float = 250, move_speed: float = 300):
+                 hp: int = 10, enter_speed: float = 250, move_speed: float = 300,
+                 hitbox_size: tuple | None = None, hitbox_offset: tuple = (0, 0)):
         
         # Spawn ylävasemmalta, hieman ruudun ulkopuolelta
         start_x = world_rect.left + image.get_width() // 2
         start_y = world_rect.top - image.get_height() // 2
         
         super().__init__(image, start_x, start_y)
+
+        # Ensure rect is centred where we expect (defensive in case parent
+        # behaviour changes). Also allow overriding the hitbox size/offset so
+        # collision rect and visual sprite can be independently tuned.
+        try:
+            self.rect.center = (int(start_x), int(start_y))
+        except Exception:
+            pass
+
+        # Optional hitbox override: size=(w,h) will resize the collision rect
+        # while preserving centre; offset=(dx,dy) will shift the rect relative
+        # to the sprite centre (useful when the visible sprite's artwork is
+        # not symmetric).
+        if hitbox_size is not None:
+            try:
+                c = self.rect.center
+                w, h = int(hitbox_size[0]), int(hitbox_size[1])
+                self.rect.size = (w, h)
+                # apply offset after resizing
+                dx, dy = int(hitbox_offset[0]), int(hitbox_offset[1])
+                self.rect.center = (c[0] + dx, c[1] + dy)
+            except Exception:
+                pass
 
         self.world_rect = world_rect
         self.hp = hp
