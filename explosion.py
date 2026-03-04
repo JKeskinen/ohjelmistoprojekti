@@ -139,24 +139,25 @@ class ExplosionManager:
             return frames
 
         # Kerätään tiedostot. Jos regex löytää numeron, käytetään sitä järjestykseen,
-        # muuten lisätään kaikki .png-tiedostot ja lajitellaan nimen mukaisesti.
+        # Kerätään kaikki .png-tiedostot ja tehdään luotettava järjestys.
+        # Käytämme `re.search`-hakua niin, että pattern voi löytyä missä tahansa
+        # tiedostonimessä. Järjestämme siten, että numerolliset avaimet ovat etusijalla
+        # (esim. 000_Explosion1_1_0.png -> 1) ja muut tiedostot tulevat nimen mukaisesti.
         for fn in os.listdir(folder):
-            full = os.path.join(folder, fn)
             if not fn.lower().endswith('.png'):
                 continue
-            m = pat.match(fn)
+            m = pat.search(fn)
             if m:
-                # yritetään poimia numero ryhmästä ja käyttää sitä avaimena
                 try:
-                    key = int(m.group(1))
+                    k = int(m.group(1))
+                    key = (0, k)  # numerollinen avain: prioriteetti 0
                 except Exception:
-                    key = fn
+                    key = (1, fn.lower())  # ei-numerollinen ryhmä: sorttaa nimellä
             else:
-                # jos kuvio ei täsmää, käytä tiedostonimeä järjestykseen
-                key = fn
+                key = (1, fn.lower())
             items.append((key, fn))
 
-        # Lajitellaan: numerot ensin nousevasti, muut tiedostonimen mukaan
+        # Lajitellaan avaimen mukaan (numerot ensin, sitten aakkosjärjestys)
         items.sort(key=lambda x: x[0])
 
         # Ladataan ja skaalataan kuvat järjestyksessä
@@ -242,16 +243,32 @@ class ExplosionManager:
         # enemy: sama paikka pienemmällä koossa
         enemy_folder = os.path.join(base, 'Explosion1')
         self.load_frames_for('enemy', folder=enemy_folder, size=(160, 160))
-        # player: look for any ship 'Destroyed' folder under alukset/alus instead of a hardcoded ship
+        # player: look for any ship 'Destroyed' folder. Check both
+        # - alukset/alus/*/Destroyed (legacy layout) and
+        # - alukset/*/Destroyed (some sprites live directly under alukset)
         project_root = os.path.dirname(__file__)
         player_folder = None
-        alukset_alus = os.path.join(os.path.dirname(__file__), 'alukset', 'alus')
-        if os.path.isdir(alukset_alus):
-            for candidate in sorted(os.listdir(alukset_alus)):
-                cand = os.path.join(alukset_alus, candidate, 'Destroyed')
+        search_bases = [
+            os.path.join(project_root, 'alukset', 'alus'),
+            os.path.join(project_root, 'alukset')
+        ]
+        desired_ship = os.environ.get('PLAYER_SHIP', 'FIGHTER').lower()
+        found_candidates = []
+        for base in search_bases:
+            if not os.path.isdir(base):
+                continue
+            for candidate in sorted(os.listdir(base)):
+                cand = os.path.join(base, candidate, 'Destroyed')
                 if os.path.isdir(cand):
-                    player_folder = cand
-                    break
+                    found_candidates.append((candidate, cand))
+
+        # Prefer a candidate whose folder name contains the desired ship name
+        for name, path in found_candidates:
+            if desired_ship in name.lower():
+                player_folder = path
+                break
+        if not player_folder and found_candidates:
+            player_folder = found_candidates[0][1]
         if player_folder:
             # jos kuvat eivät noudata numeroituja tiedostonimiä, ne silti ladataan
             self.load_frames_for('player', folder=player_folder, size=(220, 220), pattern=r"(.*)\.png")
