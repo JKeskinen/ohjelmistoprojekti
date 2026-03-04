@@ -11,7 +11,7 @@ import pygame
 import random
 #from player import Player
 from Enemies.enemy import StraightEnemy, CircleEnemy, DownEnemy, UpEnemy
-from boss_enemy import BossEnemy
+from Enemies.boss_enemy import BossEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
 from Player import Player
@@ -100,6 +100,11 @@ planeetat = [
     pygame.transform.scale(pygame.image.load("images/planeetat/slice8.png"), (100, 100)),
     pygame.transform.scale(pygame.image.load("images/planeetat/slice9.png"), (100, 100)),
     pygame.transform.scale(pygame.image.load("images/planeetat/slice10.png"), (100, 100)),
+    pygame.transform.scale(pygame.image.load("images/hd-planet/p1.png"), (150, 150)),
+    pygame.transform.scale(pygame.image.load("images/hd-planet/p2.png"), (150, 150)),
+    pygame.transform.scale(pygame.image.load("images/hd-planet/p3.png"), (150, 150)),
+    pygame.transform.scale(pygame.image.load("images/hd-planet/p4.png"), (150, 150)),
+    pygame.transform.scale(pygame.image.load("images/hd-planet/p5.png"), (150, 150)),
 ]
 
 tausta_leveys, tausta_korkeus = tausta.get_width(), tausta.get_height()
