@@ -56,6 +56,8 @@ HEALTH_ICON_POS = (X - HEALTH_ICON_SCALE_SIZE[0] - HEALTH_ICON_MARGIN, HEALTH_IC
 HITBOX_SIZE_PLAYER = (64, 64)
 HITBOX_SIZE_ENEMY = (48, 48)
 HITBOX_SIZE_BOSS = (140, 140)
+BOSS_EXPLOSION_HOLD_MS = 900
+PLAYER_DEATH_HOLD_MS = 1100
 
 
 def apply_hitbox(obj, size=None):
@@ -96,6 +98,7 @@ class Game:
         self.MAX_WAVE = 4  # Each level has up to 4 waves (1-3 normal, 4 = boss)
         self.wave_cleared = False
         self.boss_clear_menu_delay_remaining = None
+        self.player_death_menu_delay_remaining = None
         self.level_completed = False
         self.game_over = False
         self.lives = 3
@@ -179,6 +182,20 @@ class Game:
             except Exception:
                 pass
 
+        # Ensure explosion animations are loaded before gameplay starts.
+        # Without frames, spawn_enemy/spawn_boss are no-ops.
+        try:
+            self.explosion_manager.load_all_defaults()
+            generic_frames = ExplosionManager.load_frames(size=(200, 200))
+            if generic_frames:
+                self.explosion_manager.set_frames(generic_frames)
+                if not self.explosion_manager.frames_by_type.get('enemy'):
+                    self.explosion_manager.set_frames_for('enemy', generic_frames)
+                if not self.explosion_manager.frames_by_type.get('boss'):
+                    self.explosion_manager.set_frames_for('boss', generic_frames)
+        except Exception:
+            pass
+
     def init_game_objects(self):
         """Alusta pelaaja, pistejärjestelmä ja ensimmäinen wave"""
         self.pistejarjestelma = Points()
@@ -202,6 +219,7 @@ class Game:
         self.current_wave = 1
         self.wave_cleared = False
         self.boss_clear_menu_delay_remaining = None
+        self.player_death_menu_delay_remaining = None
         self.level_completed = False
         self.game_over = False
         self.enemies.clear()
@@ -295,7 +313,12 @@ class Game:
             b.update(self.dt, pygame.Rect(0,0,self.tausta_leveys,self.tausta_korkeus))
             if getattr(b,'dead',False):
                 self.enemy_bullets.remove(b)
-            elif getattr(b,'state','')=='flight' and b.rect.colliderect(self.player.rect):
+            elif (
+                getattr(b,'state','')=='flight'
+                and b.rect.colliderect(self.player.rect)
+                and self.lives > 0
+                and self.player_death_menu_delay_remaining is None
+            ):
                 b.explode()
                 self.enemy_bullets.remove(b)
                 self.player.health = max(0, self.player.health-1)
@@ -307,7 +330,7 @@ class Game:
                     pass
 
         # Kontakti-osuma vihollisen ja pelaajan välillä cooldownilla.
-        if self.enemy_hit_cooldown <= 0:
+        if self.enemy_hit_cooldown <= 0 and self.lives > 0 and self.player_death_menu_delay_remaining is None:
             for enemy in self.enemies:
                 if self.player.rect.colliderect(enemy.rect):
                     self.player.health = max(0, int(getattr(self.player, 'health', self.lives)) - 1)
@@ -331,17 +354,32 @@ class Game:
                 self.muzzles.clear()
                 self.spawn_wave(self.current_wave)
             else:
-                # Boss beaten: level is complete.
-                self.level_completed = True
-                self.running = False
-                return
+                # Boss beaten: let explosion animation play briefly before
+                # moving to level complete state.
+                if self.boss_clear_menu_delay_remaining is None:
+                    self.boss_clear_menu_delay_remaining = BOSS_EXPLOSION_HOLD_MS
 
-        if self.lives <= 0:
-            self.game_over = True
-            self.running = False
+        if self.lives <= 0 and self.player_death_menu_delay_remaining is None:
+            self.player_death_menu_delay_remaining = PLAYER_DEATH_HOLD_MS
+            try:
+                self.explosion_manager.spawn_player(self.player.rect.center, fps=24)
+            except Exception:
+                pass
 
         # Räjähdykset
         self.explosion_manager.update(self.dt)
+
+        if self.boss_clear_menu_delay_remaining is not None:
+            self.boss_clear_menu_delay_remaining -= self.dt
+            if self.boss_clear_menu_delay_remaining <= 0:
+                self.level_completed = True
+                self.running = False
+
+        if self.player_death_menu_delay_remaining is not None:
+            self.player_death_menu_delay_remaining -= self.dt
+            if self.player_death_menu_delay_remaining <= 0:
+                self.game_over = True
+                self.running = False
 
     def draw(self, target_screen):
         """Piirrä kaikki peliobjektit annettuun ruutuun"""
