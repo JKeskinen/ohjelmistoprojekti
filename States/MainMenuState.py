@@ -1,20 +1,27 @@
-from states.GameState import GameState
+from States.GameState import GameState
 from Valikot.MainMenu import MainMenu
-from states.PlayState import PlayState
 
 
 class MainMenuState(GameState):
 
-    def __init__(self, manager):
+    def __init__(self, manager=None):
         super().__init__(manager)
         self.menu = MainMenu()
 
     def update(self, events):
 
-        result = self.menu.run()
+        action = self.menu.handle_events(events)
 
-        if result == "start_game":
-            self.manager.set_state(PlayState(self.manager))
+        if action == "start":
+            try:
+                from States.PlayState import PlayState
+                self.manager.set_state(PlayState(self.manager))
+            except Exception as exc:
+                # Keep the menu active if gameplay state is not yet wired.
+                print(f"Could not start PlayState: {exc}")
+
+        elif action == "quit":
+            self.manager.running = False
 
     def draw(self, screen):
-        pass
+        self.menu.draw(screen)

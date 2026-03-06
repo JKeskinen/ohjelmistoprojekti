@@ -1,27 +1,21 @@
 import pygame
-import sys
-from Valikot.SettingsMenu import main as settings_menu_main
 
-# Näytön asetukset
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 800
 
-# Värit
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 DARK_BLUE = (52, 78, 91)
 LIGHT_BLUE = (100, 150, 200)
 HOVER_COLOR = (150, 200, 255)
 
-# Fontit
 title_font = None
 button_font = None
 small_font = None
 
-
 class Button:
-    """Nappi-luokka päämenutille"""
-    
+    """Simple UI button used by the main menu."""
+
     def __init__(self, x, y, width, height, text, color, text_color, action=None):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
@@ -29,107 +23,95 @@ class Button:
         self.text_color = text_color
         self.action = action
         self.is_hovered = False
-    
+
     def draw(self, surface):
-        """Piirtää napin"""
-        # Vaihda väri hover-tilassa
         current_color = HOVER_COLOR if self.is_hovered else self.color
         pygame.draw.rect(surface, current_color, self.rect, border_radius=10)
         pygame.draw.rect(surface, WHITE, self.rect, 3, border_radius=10)
-        
-        # Piirtää teksti napin päälle
-        text_surf = button_font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-    
+
+        text_surface = button_font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        surface.blit(text_surface, text_rect)
+
     def is_clicked(self, pos):
-        """Tarkistaa onko nappia klikattu"""
         return self.rect.collidepoint(pos)
-    
+
     def update(self, pos):
-        """Päivittää hover-tilan"""
         self.is_hovered = self.rect.collidepoint(pos)
 
-
 class MainMenu:
-    """Päämenun hallinta"""
-    
+    """State-friendly main menu that draws to an external surface."""
+
     def __init__(self):
         global title_font, button_font, small_font
 
-        # init vain jos ei ole jo initattu
         if not pygame.get_init():
             pygame.init()
-        if not pygame.display.get_init():
-            pygame.display.init()
 
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Rocket Game - Main Menu")
+        if not pygame.font.get_init():
+            pygame.font.init()
 
-        # fontit vasta nyt
         title_font = pygame.font.Font(None, 80)
         button_font = pygame.font.Font(None, 50)
         small_font = pygame.font.Font(None, 30)
 
-        # Nappien asettelu: spacing ja keskitys
         button_width = 300
         button_height = 80
         button_spacing = 30
         total_height = 3 * button_height + 2 * button_spacing
         start_y = SCREEN_HEIGHT // 2 - total_height // 2 + 40
+
         self.buttons = [
-            Button(SCREEN_WIDTH // 2 - button_width // 2, start_y, button_width, button_height, "START GAME", LIGHT_BLUE, WHITE, action="start"),
-            Button(SCREEN_WIDTH // 2 - button_width // 2, start_y + button_height + button_spacing, button_width, button_height, "SETTINGS", LIGHT_BLUE, WHITE, action="settings"),
-            Button(SCREEN_WIDTH // 2 - button_width // 2, start_y + 2 * (button_height + button_spacing), button_width, button_height, "QUIT", LIGHT_BLUE, WHITE, action="quit"),
+            Button(
+                SCREEN_WIDTH // 2 - button_width // 2,
+                start_y,
+                button_width,
+                button_height,
+                "START GAME",
+                LIGHT_BLUE,
+                WHITE,
+                action="start",
+            ),
+            Button(
+                SCREEN_WIDTH // 2 - button_width // 2,
+                start_y + button_height + button_spacing,
+                button_width,
+                button_height,
+                "SETTINGS",
+                LIGHT_BLUE,
+                WHITE,
+                action="settings",
+            ),
+            Button(
+                SCREEN_WIDTH // 2 - button_width // 2,
+                start_y + 2 * (button_height + button_spacing),
+                button_width,
+                button_height,
+                "QUIT",
+                LIGHT_BLUE,
+                WHITE,
+                action="quit",
+            ),
         ]
-        self.clock = pygame.time.Clock()
-        self.running = True
-    
-    def handle_events(self):
-        """Käsittelee näppäimistö ja hiiri-eventit"""
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-            
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pos = pygame.mouse.get_pos()
+
+    def handle_events(self, events):
+        """Handle a frame's events and return selected action or None."""
+        for event in events:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for button in self.buttons:
-                    if button.is_clicked(mouse_pos):
+                    if button.is_clicked(event.pos):
                         return button.action
-        
+
         return None
-    
-    def draw(self):
-        """Piirtää menun"""
-        self.screen.fill(DARK_BLUE)
-        # Piirrä otsikko keskelle
-        title_surf = title_font.render("ROCKET GAME", True, WHITE)
-        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 180))
-        self.screen.blit(title_surf, title_rect)
-        # Piirrä napit
+
+    def draw(self, surface):
+        surface.fill(DARK_BLUE)
+
+        title_surface = title_font.render("ROCKET GAME", True, WHITE)
+        title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 180))
+        surface.blit(title_surface, title_rect)
+
         mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:
             button.update(mouse_pos)
-            button.draw(self.screen)
-        pygame.display.update()
-    
-    def run(self):
-        """Pääsilmukka"""
-        while self.running:
-            action = self.handle_events()
-            
-            if action == "start":
-                print("Peli käynnistyy...")
-                return "start_game"
-            elif action == "settings":
-                print("Asetukset avautuvat...")
-                settings_menu_main()  # Palaa kun käyttäjä haluaa takaisin
-                # Jatkaa päävalikkoon automaattisesti
-            elif action == "quit":
-                print("Peli suljetaan...")
-                return "quit"
-            
-            self.draw()
-            self.clock.tick(60)
-        
-        return "quit"
+            button.draw(surface)

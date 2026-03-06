@@ -1,4 +1,4 @@
-from states.GameState import GameState
+from States.GameState import GameState
 import RocketGame
 
 class PlayState(GameState):

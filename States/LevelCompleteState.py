@@ -1,6 +1,6 @@
 import pygame
-from states.GameState import GameState
-from states.PlayState import PlayState
+from States.GameState import GameState
+from States.PlayState import PlayState
 
 class LevelCompleteState(GameState):
 

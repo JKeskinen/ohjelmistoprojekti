@@ -9,14 +9,12 @@ import sys
 import os
 import pygame
 import random
-#from player import Player
 from Enemies.enemy import StraightEnemy, CircleEnemy, DownEnemy, UpEnemy
 from boss_enemy import BossEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
 from Player import Player
 from player2 import Player2
-from Valikot.MainMenu import MainMenu
 from Valikot.NextLevel import NextLevel
 from Valikot.gameOver import GameOverScreen
 from SpriteSettings import SpriteSettings
@@ -25,19 +23,17 @@ from collisions import SpatialHash, apply_impact, separate, _get_pos, get_collis
 from ui import init_enemy_health_bars
 import planets
 
+from GameStateManager import GameStateManager
 
-# Näytä päävalikko ensin
+# Keep backward compatibility: running `py RocketGame.py` should now start
+# through the new state system (main menu first) instead of this legacy loop.
+if __name__ == "__main__":
+    import main as state_entry
+
+    state_entry.main()
+    raise SystemExit
+
 pygame.init()
-menu = MainMenu()
-result = menu.run()
-
-# Jos käyttäjä valitsi QUIT, lopeta
-if result != "start_game":
-    pygame.quit()
-    sys.exit()
-pygame.event.clear()
-
-#pygame.init()
 Y = 800
 X = 1600
 
@@ -58,8 +54,6 @@ HEALTH_ICON_SCALE_SIZE = (max(1, int(HEALTH_ICON_SIZE[0] * scale)), max(1, int(H
 
 # HUD position for health icon (top-right corner with margin)
 HEALTH_ICON_POS = (X - HEALTH_ICON_SCALE_SIZE[0] - HEALTH_ICON_MARGIN, HEALTH_ICON_MARGIN)
-
-
 
 screen = pygame.display.set_mode((X,Y))
 
@@ -203,14 +197,14 @@ DEBUG_DRAW_COLLISIONS = True
 spatial_hash = SpatialHash()
 collisions = set()
 
-# Wave system
+# Wave system - Poista nämä myöhemmin !!!!! 
 enemies = []
 current_wave = 1
 MAX_WAVE = 4
 wave_cleared = False
 BOSS_CLEAR_MENU_DELAY_MS = 1800
 boss_clear_menu_delay_remaining = None
-
+# Poista nämä myöhemmin !!!!!
 
 def clear_round_state():
     enemies.clear()

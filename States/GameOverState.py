@@ -1,6 +1,6 @@
 import pygame
-from states.GameState import GameState
-from states.MainMenuState import MainMenuState
+from States.GameState import GameState
+from States.MainMenuState import MainMenuState
 
 class GameOverState(GameState):
 
