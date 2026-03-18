@@ -245,13 +245,15 @@ class ExplosionManager:
         Tämä yrittää järkeviä oletuspolkuja, mutta voit aina kutsua
         `load_frames_for` omilla kansioillasi jos haluat hallita polkuja.
         """
+        boss_explosion_size = (150, 150)
+        enemy_explosion_size = (60, 60)
         base = os.path.join(os.path.dirname(__file__), 'enemy-sprite', 'PNG_Parts&Spriter_Animation', 'Explosions')
         # boss: käytä Explosion1 -kansion kehyksiä oletuksena (suurikokoinen)
         boss_folder = os.path.join(base, 'Explosion1')
-        self.load_frames_for('boss', folder=boss_folder, size=(300, 300))
+        self.load_frames_for('boss', folder=boss_folder, size=(boss_explosion_size))
         # enemy: sama paikka pienemmällä koossa
         enemy_folder = os.path.join(base, 'Explosion1')
-        self.load_frames_for('enemy', folder=enemy_folder, size=(160, 160))
+        self.load_frames_for('enemy', folder=enemy_folder, size=(enemy_explosion_size))
         # player: use dedicated explosion sprites so the effect is visually separate
         # from the ship's own Destroyed animation drawn by Player/Player2.
         player_folder = os.path.join(base, 'Explosion1')
