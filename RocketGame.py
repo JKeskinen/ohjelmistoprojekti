@@ -204,24 +204,6 @@ class Game:
         # Without frames, spawn_enemy/spawn_boss are no-ops.
         try:
             self.explosion_manager.load_all_defaults()
-            generic_frames = ExplosionManager.load_frames(size=(200, 200))
-            if generic_frames:
-                self.explosion_manager.set_frames(generic_frames)
-                if not self.explosion_manager.frames_by_type.get('enemy'):
-                    self.explosion_manager.set_frames_for('enemy', generic_frames)
-                if not self.explosion_manager.frames_by_type.get('boss'):
-                    self.explosion_manager.set_frames_for('boss', generic_frames)
-                hit_folder = os.path.join(
-                base_path,
-                "enemy-sprite",
-                "PNG_Animations",
-                "Shots",
-                "Shot3",
-                "shot3_exp2"
-        )
-                hit_frames = ExplosionManager.load_frames(folder=hit_folder, size=(64, 64))
-                if hit_frames:
-                    self.explosion_manager.set_frames_for('hit', hit_frames)
         except Exception:
             pass
 
