@@ -18,6 +18,7 @@ from Player import Player
 from player2 import Player2
 from Valikot.NextLevel import NextLevel
 from Valikot.gameOver import GameOverScreen
+from leaderboard import Leaderboard
 from SpriteSettings import SpriteSettings
 from explosion import ExplosionManager
 from Collision.collisions import SpatialHash, apply_impact, separate, _get_pos, get_collision_radius
@@ -106,6 +107,11 @@ class Game:
         self.enemy_hit_cooldown = 0
         self.enemy_hit_cooldown_duration = 1000
         self.pistejarjestelma = None
+        self.leaderboard = Leaderboard()
+        try:
+            self.leaderboard.load_from_file(os.path.join(os.path.dirname(__file__), 'leaderboard.json'))
+        except FileNotFoundError:
+            pass
 
         # Pygame-resurssit
         self.clock = pygame.time.Clock()
@@ -429,6 +435,9 @@ class Game:
                     self.boss_clear_menu_delay_remaining = BOSS_EXPLOSION_HOLD_MS
 
         if self.lives <= 0 and self.player_death_menu_delay_remaining is None:
+            self.leaderboard.add_score("", self.pistejarjestelma.hae_pisteet())
+            self.leaderboard.save_to_file(os.path.join(self.base_path, 'leaderboard.json'))
+            print(self.leaderboard.get_player_scores())
             self.player_death_menu_delay_remaining = PLAYER_DEATH_HOLD_MS
             try:
                 self.explosion_manager.spawn_player(self.player.rect.center, fps=24)
