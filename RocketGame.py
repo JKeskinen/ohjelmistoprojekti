@@ -312,9 +312,11 @@ class Game:
             else:
                 e.maybe_shoot(self.dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles})
 
-        # Päivitä meteorit
-        for meteor in self.meteors:
+        # Päivitä meteorit ja poista ruudun läpi menneet
+        for meteor in list(self.meteors):
             meteor.update(self.dt)
+            if getattr(meteor, 'dead', False):
+                self.meteors.remove(meteor)
 
         # Ammukset
         for bullet in list(self.player.weapons.bullets):
@@ -464,7 +466,8 @@ class Game:
         
 
         # Wave progression: wave 1 -> 2 -> 3 -> boss (4).
-        if len(self.enemies) == 0 and not self.level_completed and self.lives > 0:
+        # A wave is clear only when both enemies and meteors are gone.
+        if len(self.enemies) == 0 and len(self.meteors) == 0 and not self.level_completed and self.lives > 0:
             if self.current_wave < self.MAX_WAVE:
                 self.current_wave += 1
                 self.enemy_bullets.clear()

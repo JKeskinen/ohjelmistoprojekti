@@ -5,7 +5,6 @@ Sisaltaa wave 1-3 vihollisaallot ja boss-wave (wave 4).
 
 import pygame
 import random
-from Meteor.meteor_helpers import spawn_moving_meteor
 
 def _set_enemy_hp(enemy, hp):
 	enemy.hp = hp
@@ -122,9 +121,6 @@ def spawn_wave_taso1(
 			apply_hitbox(enemy, hitbox_enemy)
 			game.enemies.append(enemy)
 		
-		# Add one moving meteor to wave 2
-		spawn_moving_meteor(game, speed=150)
-		
 		return True
 
 	if wave_num == 3:
@@ -147,9 +143,6 @@ def spawn_wave_taso1(
 			_set_enemy_hp(enemy, 1)
 			apply_hitbox(enemy, hitbox_enemy)
 			game.enemies.append(enemy)
-		
-		# Add one moving meteor to wave 3
-		spawn_moving_meteor(game, speed=180)
 		
 		return True
 

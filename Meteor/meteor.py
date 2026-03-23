@@ -9,8 +9,6 @@ Meteors are moving obstacles that:
 
 import pygame
 import os
-import random
-import math
 
 
 class Meteor(pygame.sprite.Sprite):
@@ -23,15 +21,16 @@ class Meteor(pygame.sprite.Sprite):
         - Enemies are not affected by meteors
     """
     
-    def __init__(self, x, y, image=None, bounds=None, speed=150):
+    def __init__(self, x, y, image=None, bounds=None, speed=80, velocity=None):
         """Initialize a moving meteor at the given position.
         
         Args:
             x: X position in pixels
             y: Y position in pixels
             image: Pygame surface image (optional, loads default if not provided)
-            bounds: Tuple (width, height) of movement area for bouncing
-            speed: Movement speed in pixels per second (default 150)
+            bounds: Tuple (width, height) of movement area
+            speed: Movement speed in pixels per second (default 80)
+            velocity: Optional explicit velocity vector (pygame.Vector2 or tuple)
         """
         super().__init__()
         
@@ -41,32 +40,26 @@ class Meteor(pygame.sprite.Sprite):
                 base_path = os.path.dirname(os.path.dirname(__file__))
                 meteor_path = os.path.join(base_path, 'images', 'planeetat', 'slice2.png')
                 image = pygame.image.load(meteor_path).convert_alpha()
-                # Scale to larger size (150x150)
-                image = pygame.transform.scale(image, (150, 150))
+                # Scale to larger size (220x220)
+                image = pygame.transform.scale(image, (220, 220))
             except Exception as e:
                 print(f"Warning: Could not load meteor image: {e}")
                 # Fallback: create a simple surface
-                image = pygame.Surface((150, 150), pygame.SRCALPHA)
-                pygame.draw.circle(image, (180, 100, 50), (75, 75), 70)
+                image = pygame.Surface((220, 220), pygame.SRCALPHA)
+                pygame.draw.circle(image, (180, 100, 50), (110, 110), 105)
         
         self.image = image
         self.rect = self.image.get_rect(center=(int(x), int(y)))
         
         # Physics properties
         self.pos = pygame.Vector2(x, y)
-        self.bounds = bounds or (1600, 800)  # Default screen size
+        self.bounds = bounds or (1600, 800)
         self.speed = speed
-        
-        # Choose random direction: 0=right, 1=left, 2=down, 3=up
-        direction = random.randint(0, 3)
-        if direction == 0:  # Right
+
+        if velocity is None:
             self.vel = pygame.Vector2(self.speed, 0)
-        elif direction == 1:  # Left
-            self.vel = pygame.Vector2(-self.speed, 0)
-        elif direction == 2:  # Down
-            self.vel = pygame.Vector2(0, self.speed)
-        else:  # Up
-            self.vel = pygame.Vector2(0, -self.speed)
+        else:
+            self.vel = pygame.Vector2(velocity)
         
         self.mass = 100.0  # Very heavy - won't move during collisions
         
@@ -79,9 +72,11 @@ class Meteor(pygame.sprite.Sprite):
         # Meteor is not an enemy or a destructible object
         self.is_meteor = True
         self.health = float('inf')  # Meteors cannot be destroyed
+        self.dead = False
+        self._entered_play_area = False
     
     def update(self, dt):
-        """Update meteor position, bouncing at screen edges.
+        """Update meteor position and despawn after it crosses the play area.
         
         Args:
             dt: Delta time in milliseconds
@@ -92,21 +87,15 @@ class Meteor(pygame.sprite.Sprite):
         # Move meteor
         self.pos += self.vel * dt_seconds
         
-        # Bounce off edges
+        # Track whether meteor has entered visible play area at least once.
         width, height = self.bounds
-        meteor_radius = self.collision_radius
-        
-        # Horizontal bouncing
-        if self.pos.x - meteor_radius <= 0 or self.pos.x + meteor_radius >= width:
-            self.vel.x = -self.vel.x
-            # Clamp position to prevent getting stuck
-            self.pos.x = max(meteor_radius, min(width - meteor_radius, self.pos.x))
-        
-        # Vertical bouncing
-        if self.pos.y - meteor_radius <= 0 or self.pos.y + meteor_radius >= height:
-            self.vel.y = -self.vel.y
-            # Clamp position to prevent getting stuck
-            self.pos.y = max(meteor_radius, min(height - meteor_radius, self.pos.y))
+        play_rect = pygame.Rect(0, 0, width, height)
+        if self.rect.colliderect(play_rect):
+            self._entered_play_area = True
+
+        # Despawn after meteor has crossed screen and moved out again.
+        if self._entered_play_area and not self.rect.colliderect(play_rect):
+            self.dead = True
         
         # Update rect position
         self.rect.center = (int(self.pos.x), int(self.pos.y))
