@@ -1,4 +1,5 @@
 import pygame
+from display_settings import load_display_settings
 
 
 class GameStateManager:
@@ -6,7 +7,9 @@ class GameStateManager:
     def __init__(self, initial_state):
         pygame.init()
 
-        self.screen = pygame.display.set_mode((1600, 800))
+        display = load_display_settings()
+        flags = pygame.FULLSCREEN if display.get("fullscreen", False) else 0
+        self.screen = pygame.display.set_mode((display["width"], display["height"]), flags)
         pygame.display.set_caption("Rocket Game")
 
         self.clock = pygame.time.Clock()
@@ -24,6 +27,9 @@ class GameStateManager:
         """Pelin pääsilmukka"""
 
         while self.running:
+            current_surface = pygame.display.get_surface()
+            if current_surface is not None and current_surface != self.screen:
+                self.screen = current_surface
 
             events = pygame.event.get()
 

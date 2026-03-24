@@ -58,15 +58,10 @@ except ImportError:
     spawn_wave_test2 = None
 
 from States.GameStateManager import GameStateManager
-# Näytön koko
-X, Y = 1600, 800
+# Näytön/HUD perusmitat
+DEFAULT_VIEW_SIZE = (1600, 800)
 HEALTH_ICON_SIZE = (600, 200)
 HEALTH_ICON_MARGIN = 16
-max_w = max(1, X - 2 * HEALTH_ICON_MARGIN)
-max_h = max(1, Y - 2 * HEALTH_ICON_MARGIN)
-scale = min(max_w / HEALTH_ICON_SIZE[0], max_h / HEALTH_ICON_SIZE[1], 1.0)
-HEALTH_ICON_SCALE_SIZE = (max(1, int(HEALTH_ICON_SIZE[0]*scale)), max(1, int(HEALTH_ICON_SIZE[1]*scale)))
-HEALTH_ICON_POS = (X - HEALTH_ICON_SCALE_SIZE[0] - HEALTH_ICON_MARGIN, HEALTH_ICON_MARGIN)
 
 # Hitbox-koko per tyyppi
 HITBOX_SIZE_PLAYER = (64, 64)
@@ -99,6 +94,10 @@ class Game:
 
     def __init__(self, screen, level_number=1):
         self.screen = screen
+        self.view_width, self.view_height = DEFAULT_VIEW_SIZE
+        self.health_icon_scale_size = HEALTH_ICON_SIZE
+        self.health_icon_pos = (HEALTH_ICON_MARGIN, HEALTH_ICON_MARGIN)
+        self._refresh_view_metrics()
         self.level_number = level_number  # Track which level this instance manages (1-5)
         self.is_test_level = int(level_number) == 0
         self.is_test2_level = int(level_number) == 6
@@ -254,12 +253,62 @@ class Game:
         # Alusta pelaaja ja ensimmäinen wave
         self.init_game_objects()
 
+    def _refresh_view_metrics(self):
+        """Sync cached viewport/HUD metrics from current render target size."""
+        old_w = int(getattr(self, "view_width", 0))
+        old_h = int(getattr(self, "view_height", 0))
+        w, h = self.screen.get_size()
+        self.view_width = max(1, int(w))
+        self.view_height = max(1, int(h))
+
+        max_w = max(1, self.view_width - 2 * HEALTH_ICON_MARGIN)
+        max_h = max(1, self.view_height - 2 * HEALTH_ICON_MARGIN)
+        scale = min(max_w / HEALTH_ICON_SIZE[0], max_h / HEALTH_ICON_SIZE[1], 1.0)
+        self.health_icon_scale_size = (
+            max(1, int(HEALTH_ICON_SIZE[0] * scale)),
+            max(1, int(HEALTH_ICON_SIZE[1] * scale)),
+        )
+        self.health_icon_pos = (
+            self.view_width - self.health_icon_scale_size[0] - HEALTH_ICON_MARGIN,
+            HEALTH_ICON_MARGIN,
+        )
+        return old_w != self.view_width or old_h != self.view_height
+
+    def _rescale_assets_for_view(self):
+        """Resize view-dependent assets after display mode/size changes."""
+        if hasattr(self, "tausta_source") and self.tausta_source is not None:
+            self.tausta = pygame.transform.scale(self.tausta_source, (self.view_width, self.view_height))
+            self.tausta_leveys, self.tausta_korkeus = self.tausta.get_size()
+
+        raw_icons = getattr(self, "health_raw_imgs", {})
+        if raw_icons:
+            self.health_imgs = {}
+            for hp, raw in raw_icons.items():
+                if raw is None:
+                    self.health_imgs[hp] = None
+                else:
+                    self.health_imgs[hp] = pygame.transform.scale(raw, self.health_icon_scale_size)
+
+        if self.hazard_system is not None:
+            self.hazard_system.world_rect.size = (self.tausta_leveys, self.tausta_korkeus)
+
+        if self.player is not None:
+            px, py = self.player.rect.center
+            px = max(0, min(px, self.tausta_leveys))
+            py = max(0, min(py, self.tausta_korkeus))
+            self.player.rect.center = (px, py)
+
+        max_cam_x = max(0, self.tausta_leveys - self.view_width)
+        max_cam_y = max(0, self.tausta_korkeus - self.view_height)
+        self.camera_x = max(0, min(self.camera_x, max_cam_x))
+        self.camera_y = max(0, min(self.camera_y, max_cam_y))
+
     def _load_assets(self):
         """Lataa tausta, vihollisten kuvat ja planeetat"""
         base_path = os.path.dirname(__file__)
         self.base_path = base_path
-        self.tausta = pygame.image.load(os.path.join(base_path,'images','taustat','avaruus.png')).convert()
-        self.tausta = pygame.transform.scale(self.tausta, (X, Y))
+        self.tausta_source = pygame.image.load(os.path.join(base_path,'images','taustat','avaruus.png')).convert()
+        self.tausta = pygame.transform.scale(self.tausta_source, (self.view_width, self.view_height))
         self.tausta_leveys, self.tausta_korkeus = self.tausta.get_width(), self.tausta.get_height()
 
         # Lataa vihollisten kuvat
@@ -305,6 +354,7 @@ class Game:
         ]
 
         # Pelaajan health HUD kuvat: images/elementit/15.png .. 20.png
+        self.health_raw_imgs = {}
         self.health_imgs = {}
         health_dir = os.path.join(base_path, 'images', 'elementit')
         for h in range(0, 6):
@@ -312,9 +362,10 @@ class Game:
             path = os.path.join(health_dir, f"{img_index}.png")
             try:
                 img = pygame.image.load(path).convert_alpha()
-                img = pygame.transform.scale(img, HEALTH_ICON_SCALE_SIZE)
-                self.health_imgs[h] = img
+                self.health_raw_imgs[h] = img
+                self.health_imgs[h] = pygame.transform.scale(img, self.health_icon_scale_size)
             except Exception:
+                self.health_raw_imgs[h] = None
                 self.health_imgs[h] = None
 
         # Initialize boss/enemy health bar images used by BossEnemy.
@@ -846,6 +897,9 @@ class Game:
         frame_start = time.perf_counter()
         self.dt = self.clock.tick(60)
 
+        if self._refresh_view_metrics():
+            self._rescale_assets_for_view()
+
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
                 self.DEBUG_DRAW_ENEMY_FACING = not self.DEBUG_DRAW_ENEMY_FACING
@@ -867,8 +921,8 @@ class Game:
             self.enemy_calm_timer_ms = max(0, self.enemy_calm_timer_ms - self.dt)
 
         # Kamera pelaajan ympärillä
-        self.camera_x = max(0, min(self.player.rect.centerx - X//2, self.tausta_leveys - X))
-        self.camera_y = max(0, min(self.player.rect.centery - Y//2, self.tausta_korkeus - Y))
+        self.camera_x = max(0, min(self.player.rect.centerx - self.view_width // 2, self.tausta_leveys - self.view_width))
+        self.camera_y = max(0, min(self.player.rect.centery - self.view_height // 2, self.tausta_korkeus - self.view_height))
 
         # Päivitä viholliset
         for e in list(self.enemies):
@@ -1217,7 +1271,13 @@ class Game:
     def draw(self, target_screen):
         """Piirrä kaikki peliobjektit annettuun ruutuun"""
         self.screen = target_screen
-        self.screen.blit(self.tausta, (0,0), area=(self.camera_x, self.camera_y, X, Y))
+        if self._refresh_view_metrics():
+            self._rescale_assets_for_view()
+        self.screen.blit(
+            self.tausta,
+            (0, 0),
+            area=(self.camera_x, self.camera_y, self.view_width, self.view_height),
+        )
 
         for kuva, (x, y) in zip(self.planeetat, self.planeetta_paikat):
             self.screen.blit(kuva, (x - self.camera_x, y - self.camera_y))
@@ -1245,7 +1305,15 @@ class Game:
         self.explosion_manager.draw(self.screen, self.camera_x, self.camera_y)
 
         self.pistejarjestelma.show_score(10,10, pygame.font.SysFont('Arial',24), self.screen)
-        draw_hud(self.screen, X, Y, self.player, self.lives, self.health_imgs, HEALTH_ICON_POS)
+        draw_hud(
+            self.screen,
+            self.view_width,
+            self.view_height,
+            self.player,
+            self.lives,
+            self.health_imgs,
+            self.health_icon_pos,
+        )
         self._draw_enemy_facing_debug(self.screen)
         self._draw_physics_overlay(self.screen)
 

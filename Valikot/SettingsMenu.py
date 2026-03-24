@@ -9,6 +9,13 @@ from physics_settings import (
     save_physics_preset,
     save_physics_settings,
 )
+from display_settings import (
+    load_display_settings,
+    parse_resolution_label,
+    resolution_items,
+    resolution_to_label,
+    save_display_settings,
+)
 
 #------------------------------------------------------
 #Asennus: pip install pygame-menu
@@ -16,7 +23,7 @@ from physics_settings import (
 
 
 # Oletusnayton asetukset (kaytetaan vain koordinaatteihin, ei luoda uutta ikkunaa)
-WIDTH, HEIGHT = 700, 600
+WIDTH, HEIGHT = 700, 500
 
 # Standard RGB colors
 RED = (255, 0, 0)
@@ -67,30 +74,13 @@ def main():
     physics_data = load_physics_settings()
     preset_selector = None
 
-    graphics = [
-        ("Low", "low"),
-        ("Medium", "medium"),
-        ("High", "high"),
-        ("Ultra High", "ultra high"),
-    ]
+    display_data = load_display_settings()
 
-    resolution = [
-        ("1920x1080", "1920x1080"),
-        ("1920x1200", "1920x1200"),
-        ("1280x720", "1280x720"),
-        ("2560x1440", "2560x1440"),
-        ("3840x2160", "3840x2160"),
-    ]
+    resolution = resolution_items()
 
-    difficulty = [
-        ("Easy", "Easy"),
-        ("Medium", "Medium"),
-        ("Expert", "Expert"),
-    ]
-
-    perspectives = [
-        ("FPP", "fpp"),
-        ("TPP", "tpp"),
+    display_modes = [
+        ("Windowed", "windowed"),
+        ("Fullscreen", "fullscreen"),
     ]
 
     physics_profiles = [
@@ -208,6 +198,33 @@ def main():
         for key in data.keys():
             print(f"{key}\t:\t{data[key]}")
 
+    def _index_for_value(items, value):
+        target = str(value).strip().lower()
+        for i, (_, item_value) in enumerate(items):
+            if str(item_value).strip().lower() == target:
+                return i
+        return 0
+
+    def apply_display_settings_from_menu():
+        nonlocal screen, frozen_bg
+        data = general_menu.get_input_data()
+        selected_resolution = data.get("resolution", (("1280x720", "1280x720"), 0))[0][1]
+        selected_mode = data.get("display_mode", (("Windowed", "windowed"), 0))[0][1]
+
+        width, height = parse_resolution_label(selected_resolution)
+        fullscreen = str(selected_mode).strip().lower() == "fullscreen"
+
+        new_display = {
+            "width": width,
+            "height": height,
+            "fullscreen": fullscreen,
+        }
+        save_display_settings(new_display)
+
+        flags = pygame.FULLSCREEN if fullscreen else 0
+        screen = pygame.display.set_mode((width, height), flags)
+        frozen_bg = screen.copy()
+
     # Main settings hub (no scrolling needed)
     settings.add.button("General Settings", general_menu)
     settings.add.button("Physics Settings", physics_menu)
@@ -216,47 +233,31 @@ def main():
     settings.add.button("Return To Main Menu", exit_settings)
 
     # General settings page
-    general_menu.add.text_input(title="User Name : ", textinput_id="username")
-    general_menu.add.dropselect(
-        title="Graphics Level",
-        items=graphics,
-        dropselect_id="graphics level",
-        default=0,
-    )
-    general_menu.add.dropselect_multiple(
+    general_menu.add.selector(
         title="Window Resolution",
         items=resolution,
-        dropselect_multiple_id="Resolution",
-        open_middle=True,
-        max_selected=1,
-        selection_box_height=6,
+        selector_id="resolution",
+        default=_index_for_value(
+            resolution,
+            resolution_to_label(display_data.get("width", 1280), display_data.get("height", 720)),
+        ),
     )
-    general_menu.add.toggle_switch(title="Muisc", default=True, toggleswitch_id="music")
+    general_menu.add.selector(
+        title="Display Mode",
+        items=display_modes,
+        selector_id="display_mode",
+        default=_index_for_value(
+            display_modes,
+            "fullscreen" if display_data.get("fullscreen", False) else "windowed",
+        ),
+    )
+    general_menu.add.toggle_switch(title="Music", default=True, toggleswitch_id="music")
     general_menu.add.toggle_switch(title="Sounds", default=False, toggleswitch_id="sound")
-    general_menu.add.selector(
-        title="Difficulty\t",
-        items=difficulty,
-        selector_id="difficulty",
-        default=0,
-    )
-    general_menu.add.range_slider(
-        title="FOV",
-        default=60,
-        range_values=(50, 100),
-        increment=1,
-        value_format=lambda x: str(int(x)),
-        rangeslider_id="fov",
-    )
-    general_menu.add.selector(
-        title="Perspective",
-        items=perspectives,
-        default=0,
-        style="fancy",
-        selector_id="perspective",
-    )
-    general_menu.add.clock(
-        clock_format="%d-%m-%y %H:%M:%S",
-        title_format="Local Time : {0}",
+    general_menu.add.button(
+        title="Apply Settings",
+        action=apply_display_settings_from_menu,
+        font_color=WHITE,
+        background_color=(54, 120, 82),
     )
     general_menu.add.button(
         title="Print Settings",
@@ -337,6 +338,7 @@ def main():
 
     while not done:
         settings.mainloop(screen, bgfun=draw_translucent_bg, disable_loop=True)
+    apply_display_settings_from_menu()
     return selected_action
 
 

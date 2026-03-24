@@ -1,3 +1,5 @@
+import pygame
+
 from States.GameState import GameState
 from Valikot.MainMenu import MainMenu
 
@@ -27,6 +29,9 @@ class MainMenuState(GameState):
                 from Tasot.LevelManager import LevelManager
 
                 settings_action = settings_menu_main()
+                current_surface = pygame.display.get_surface()
+                if current_surface is not None:
+                    self.manager.screen = current_surface
                 if settings_action == "start_test_level":
                     test_level_manager = LevelManager(self.manager.screen, level_numbers=[0])
                     self.manager.set_state(PlayState(self.manager, level_manager=test_level_manager))
