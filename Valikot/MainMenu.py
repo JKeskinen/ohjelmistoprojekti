@@ -39,6 +39,56 @@ class Button:
     def update(self, pos):
         self.is_hovered = self.rect.collidepoint(pos)
 
+class TextInput:
+    """Simple text input box used by the settings menu."""
+
+    def __init__(self, x, y, width, height, text='', color=WHITE, text_color=BLACK):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.color = color
+        self.text_color = text_color
+        self.active = False
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.color, self.rect, border_radius=5)
+        pygame.draw.rect(surface, BLACK, self.rect, 2, border_radius=5)
+
+        text_surface = small_font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(midleft=(self.rect.x + 10, self.rect.centery))
+        surface.blit(text_surface, text_rect)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            self.active = self.rect.collidepoint(event.pos)
+        elif event.type == pygame.KEYDOWN and self.active:
+            if event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            else:
+                self.text += event.unicode
+    
+    def get_value(self):
+        return self.text.strip()
+    
+    def set_value(self, value):
+        self.text = value
+
+    def clear(self):
+        self.text = ''
+    
+    def __str__(self):
+        return self.text
+    
+    def save_to_file(self, filename):
+        with open(filename, 'w') as file:
+            file.write(self.text)
+    
+    def load_from_file(self, filename):
+        try:
+            with open(filename, 'r') as file:
+                self.text = file.read().strip()
+        except FileNotFoundError:
+            self.text = ''
+
 class MainMenu:
     """State-friendly main menu that draws to an external surface."""
 
@@ -94,6 +144,8 @@ class MainMenu:
             ),
         ]
 
+        self.text_input = TextInput(50, SCREEN_HEIGHT - 100, 300, 40)
+
     def handle_events(self, events):
         """Handle a frame's events and return selected action or None."""
         for event in events:
@@ -103,6 +155,9 @@ class MainMenu:
                         return button.action
 
         return None
+    
+    def get_value(self):
+        return self.text_input.get_value()
 
     def draw(self, surface):
         surface.fill(DARK_BLUE)
@@ -115,3 +170,7 @@ class MainMenu:
         for button in self.buttons:
             button.update(mouse_pos)
             button.draw(surface)
+        
+        self.text_input.handle_event(pygame.event.poll())
+        self.text_input.draw(surface)
+        self.text_input.save_to_file('player_name.txt')

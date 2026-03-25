@@ -425,9 +425,20 @@ class Game:
                     self.boss_clear_menu_delay_remaining = BOSS_EXPLOSION_HOLD_MS
 
         if self.lives <= 0 and self.player_death_menu_delay_remaining is None:
-            self.leaderboard.add_score("", self.pistejarjestelma.hae_pisteet())
+            try:
+                with open('player_name.txt', 'r') as file:
+                    self.text = file.read().strip()
+            except FileNotFoundError:
+                self.text = ''
+            self.leaderboard.add_score(self.text,
+                                       self.pistejarjestelma.hae_pisteet())
             self.leaderboard.save_to_file(os.path.join(self.base_path, 'leaderboard.json'))
-            print(self.leaderboard.get_player_scores())
+            try:
+                with open('player_name.txt', 'w') as file:
+                    # Varmista, että tiedosto on tyhjä ennen seuraavaa peliä.
+                    file.flush()
+            except Exception:
+                pass
 
             if hasattr(self.player, 'is_destroyed'):
                 self.player.is_destroyed = True
