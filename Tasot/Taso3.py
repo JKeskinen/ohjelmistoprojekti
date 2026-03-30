@@ -2,7 +2,6 @@
 
 Taso 3 käyttää Taso 2:n kaltaista wave-rakennetta ja lisää meteoreja.
 """
-
 import random
 
 import pygame
@@ -28,9 +27,10 @@ def _spawn_hazard_meteor_cluster(game, speed=80):
         return
 
     width = game.tausta_leveys
-    spawn_margin = 140
+    height = game.tausta_korkeus
     x = random.randint(80, max(80, width - 80))
-    y = -spawn_margin
+    # HazardSystem removes meteors outside world bounds, so spawn from inside top edge.
+    y = 36
     dx = random.choice((-1, 1))
     base_vx = dx * speed * 0.7071
     base_vy = speed * 0.7071
@@ -41,14 +41,16 @@ def _spawn_hazard_meteor_cluster(game, speed=80):
     small_count = random.randint(2, 4)
     for _ in range(small_count):
         offset_x = random.randint(-140, 140)
-        offset_y = random.randint(-120, 30)
+        offset_y = random.randint(-30, 90)
         tier = random.choice((1, 1, 2))
         speed_mul = random.uniform(1.02, 1.22)
+        child_x = max(24, min(width - 24, x + offset_x))
+        child_y = max(24, min(height - 24, y + offset_y))
         small_vel = (
             base_vx * speed_mul + random.uniform(-12.0, 12.0),
             base_vy * speed_mul + random.uniform(-10.0, 10.0),
         )
-        hs.spawn_meteor(tier=tier, center=(x + offset_x, y + offset_y), velocity=small_vel)
+        hs.spawn_meteor(tier=tier, center=(child_x, child_y), velocity=small_vel)
 
 
 def _spawn_wave_meteors(game, wave_num):
@@ -249,7 +251,7 @@ def spawn_wave_taso3(
         game.boss = boss_enemy_cls(
             game.boss_image,
             pygame.Rect(0, 0, w, h),
-            hp=25,
+            hp=40,
             enter_speed=speeds['boss_enter'],
             move_speed=speeds['boss_move'],
             hitbox_size=hitbox_boss,
