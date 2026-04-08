@@ -167,10 +167,14 @@ class BombHazard:
     STATE_EXPLODE = "explode"
     STATE_DONE = "done"
 
-    def __init__(self, center, sprites: HazardSpriteLibrary, config, chain=False, velocity=(0, 0), drop_phase=False, family=None):
+    def __init__(self, center, sprites: HazardSpriteLibrary, config, chain=False, velocity=(0, 0), drop_phase=False, family=None, game_sounds=None):
         self.pos = pygame.Vector2(center)
         self.sprites = sprites
         self.config = config
+
+        """VÄLITTÄÄ GAMESOUND-OLION, JOTTA VOI SOITTAA"""
+        self.game_sounds = game_sounds 
+        
         bomb_sets = self.sprites.mapping.get("bomb_sets", {})
         requested_family = str(family).strip() if family is not None else str(self.sprites.mapping.get("bomb_family", "3"))
         if requested_family not in bomb_sets:
@@ -232,6 +236,8 @@ class BombHazard:
             self.radius *= float(self.config["chain_radius_scale"])
             self.damage = max(1, int(round(self.damage * float(self.config["chain_damage_scale"]))))
             self._explosion_damage_pending = True
+            if self.game_sounds:
+                self.game_sounds.play_sfx("bomb_explosion")
 
     def _bomb_frame(self, dt_seconds, warning=False):
         frames = self._frames["warning" if warning else "idle"]
@@ -313,6 +319,8 @@ class BombHazard:
                 self.state = self.STATE_EXPLODE
                 self.timer = 0.0
                 self._explosion_damage_pending = True
+                if self.game_sounds:
+                    self.game_sounds.play_sfx("bomb_explosion")
 
         elif self.state == self.STATE_EXPLODE:
             frames = self._frames["explode"]
@@ -489,7 +497,7 @@ class Shockwave:
 class HazardSystem:
     """Unified update/render/collision pipeline for meteors, bombs, and pickups."""
 
-    def __init__(self, world_size, sprite_root, config=None):
+    def __init__(self, world_size, sprite_root, config=None, game_sounds=None):
         merged = dict(DEFAULT_HAZARD_CONFIG)
         if config:
             merged.update(config)
@@ -497,6 +505,7 @@ class HazardSystem:
         self.enabled = bool(self.config.get("enabled", True))
         self.world_rect = pygame.Rect(0, 0, int(world_size[0]), int(world_size[1]))
         self.sprites = HazardSpriteLibrary(sprite_root, config=self.config)
+        self.game_sounds = game_sounds
 
         self.bombs = []
         self.meteors = []
@@ -547,12 +556,12 @@ class HazardSystem:
         self.meteors.append(meteor)
         return meteor
 
-    def spawn_bomb(self, center, chain=False):
-        bomb = BombHazard(center, self.sprites, self.config, chain=chain)
+    def spawn_bomb(self, center, chain=False, game_sounds=None):
+        bomb = BombHazard(center, self.sprites, self.config, chain=chain, game_sounds=game_sounds)
         self.bombs.append(bomb)
         return bomb
 
-    def spawn_boss_drop_bomb(self, center):
+    def spawn_boss_drop_bomb(self, center, game_sounds=None):
         vy = float(self.config.get("boss_drop_initial_speed", 300.0))
         vx = random.uniform(-float(self.config.get("boss_drop_lateral_speed", 95.0)), float(self.config.get("boss_drop_lateral_speed", 95.0)))
         bomb_sets = self.sprites.mapping.get("bomb_sets", {})
@@ -568,6 +577,7 @@ class HazardSystem:
             velocity=(vx, vy),
             drop_phase=True,
             family=chosen_family,
+            game_sounds=game_sounds,
         )
         self.bombs.append(bomb)
         return bomb
@@ -583,7 +593,7 @@ class HazardSystem:
             chance = max(chance, 0.65)
 
         if random.random() <= chance:
-            self.spawn_bomb(enemy.rect.center)
+            self.spawn_bomb(enemy.rect.center, game_sounds=self.game_sounds)
             self._enemy_drop_cooldown = float(self.config["enemy_drop_cooldown"])
 
     def _maybe_spawn_meteor(self, dt_seconds):
@@ -612,7 +622,7 @@ class HazardSystem:
         target = pygame.Vector2(center) + offset
         target.x = max(48, min(self.world_rect.width - 48, target.x))
         target.y = max(48, min(self.world_rect.height - 48, target.y))
-        self.spawn_boss_drop_bomb(target)
+        self.spawn_boss_drop_bomb(target, game_sounds=self.game_sounds)
 
         self._boss_drop_timer = random.uniform(
             float(self.config["boss_drop_interval_min"]),

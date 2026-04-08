@@ -204,6 +204,7 @@ class Game:
                     "shockwave_band": 46.0,
                     "shockwave_push": 480.0,
                 },
+                game_sounds=pelimusat.game_sounds,
             )
             # Keep legacy access working for existing code that uses self.meteors.
             self.meteors = self.hazard_system.meteors
@@ -231,6 +232,7 @@ class Game:
                     "shockwave_band": 42.0,
                     "shockwave_push": 430.0,
                 },
+                game_sounds=pelimusat.game_sounds,
             )
             self.meteors = self.hazard_system.meteors
         elif int(self.level_number) == 3:
@@ -248,6 +250,7 @@ class Game:
                     "boss_drop_interval_min": 9999.0,
                     "boss_drop_interval_max": 9999.0,
                 },
+                game_sounds=pelimusat.game_sounds,
             )
             self.meteors = self.hazard_system.meteors
 
@@ -640,6 +643,7 @@ class Game:
                 "bomb_damage": 1,
                 "bomb_sprite_size": 58,
             },
+            game_sounds=pelimusat.game_sounds,
         )
 
     def _start_boss_storm_phase(self):
