@@ -32,15 +32,22 @@ class LevelManager:
         self.current_level_index = 0
         self.total_score = 0
 
-        # Create level instances (each Game instance for a level)
-        self.levels = [Game(screen, level_number=level_id) for level_id in self.level_numbers]
+        # Create levels lazily to keep Start Game responsive.
+        self.levels = [None] * self.num_levels
 
         # Active level reference
-        self.current_level = self.levels[self.current_level_index]
+        self.current_level = self._get_or_create_level(self.current_level_index)
 
         # Game-wide state
         self.game_over = False
         self.all_levels_completed = False
+
+    def _get_or_create_level(self, level_index):
+        """Return existing Game instance for level index or create it on demand."""
+        if self.levels[level_index] is None:
+            level_id = self.level_numbers[level_index]
+            self.levels[level_index] = Game(self.screen, level_number=level_id)
+        return self.levels[level_index]
 
     def _prime_level_timing(self, level):
         """Reset timing after level activation to avoid large first-frame dt."""
@@ -67,7 +74,7 @@ class LevelManager:
 
         if self.current_level_index < self.num_levels - 1:
             self.current_level_index += 1
-            self.current_level = self.levels[self.current_level_index]
+            self.current_level = self._get_or_create_level(self.current_level_index)
             self._prime_level_timing(self.current_level)
 
         # Näytä uuden tason pisteinä tähän asti kerätty yhteissaldo

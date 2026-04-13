@@ -14,6 +14,22 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 DARK_BLUE = (52, 78, 91)
 
+_CURRENT_PLAYER_NAME = ""
+
+
+def set_current_player_name(value: str) -> None:
+    global _CURRENT_PLAYER_NAME
+    _CURRENT_PLAYER_NAME = str(value).strip()
+
+
+def get_current_player_name() -> str:
+    return _CURRENT_PLAYER_NAME
+
+
+def clear_current_player_name() -> None:
+    global _CURRENT_PLAYER_NAME
+    _CURRENT_PLAYER_NAME = ""
+
 class TextInput:
     """Simple text input box used by the settings menu."""
 
@@ -24,6 +40,7 @@ class TextInput:
         self.text_color = text_color
         self.active = False
         self.last_saved_text = text
+        set_current_player_name(text)
 
     def draw(self, surface):
         pygame.draw.rect(surface, self.color, self.rect, border_radius=5)
@@ -41,7 +58,7 @@ class TextInput:
                 self.text = self.text[:-1]
             else:
                 self.text += event.unicode
-            self.save_if_changed('player_name.txt')
+            self.save_if_changed()
     
     def set_rect(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
@@ -51,20 +68,21 @@ class TextInput:
     
     def set_value(self, value):
         self.text = value
+        set_current_player_name(value)
 
     def clear(self):
         self.text = ''
+        clear_current_player_name()
     
     def __str__(self):
         return self.text
     
-    def save_to_file(self, filename):
-        """TALLENNA TEKSTI TIEDOSTOON"""
-        with open(filename, 'w') as file:
-            file.write(self.text)
+    def save_to_file(self, filename=None):
+        """TALLENNA NIMI MUISTIIN, EI LEVYLLE"""
+        set_current_player_name(self.text)
     
-    def save_if_changed(self, filename):
-        """TALLENNA VAIN JOS TEKSTI ON MUUTTUNUT"""
+    def save_if_changed(self, filename=None):
+        """PÄIVITÄ NIMI VAIN JOS TEKSTI ON MUUTTUNUT"""
         if self.text != self.last_saved_text:
             self.save_to_file(filename)
             self.last_saved_text = self.text
@@ -98,6 +116,9 @@ class MainMenu:
         self.buttons = []
         self.panel_rect = None
         self.background_image = None
+        self._last_layout_size = None
+        self._leaderboard_cache = []
+        self._leaderboard_mtime = None
         self.text_input = TextInput(1600, 800, 300, 40)
         self._update_layout()
 
@@ -108,6 +129,11 @@ class MainMenu:
             width, height = screen.get_width(), screen.get_height()
         else:
             width, height = 1600, 800
+
+        # Expensive relayout/image scaling should run only when display size changes.
+        if self._last_layout_size == (width, height):
+            return
+        self._last_layout_size = (width, height)
 
         panel_left = width // 2 - self.panel_width // 2
         panel_top = height // 2 - self.panel_height // 2
@@ -162,6 +188,7 @@ class MainMenu:
     def handle_events(self, events):
         """Handle a frame's events and return selected action or None."""
         for event in events:
+            self.text_input.handle_event(event)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for button in self.buttons:
                     if button.is_clicked(event.pos):
@@ -172,20 +199,29 @@ class MainMenu:
     def get_value(self):
         return self.text_input.get_value()
     
-    def show_score(self, x, y, font, screen, filename=DEFAULT_LEADERBOARD_FILE, top_n=5):
+    def _refresh_leaderboard_cache(self, filename=DEFAULT_LEADERBOARD_FILE, top_n=5):
         try:
+            mtime = os.path.getmtime(filename)
+            if self._leaderboard_mtime == mtime and self._leaderboard_cache:
+                return
             with open(filename, 'r') as file:
                 scores = json.load(file)
-            scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True)[:top_n])
-            screen.blit(font.render("LEADERBOARD", True, (255, 255, 255)), (x, y))
-            for player_id, score in scores.items():
-                score_text = f"{player_id}: {score}"
-                score = font.render(score_text, True, (255, 255, 255))
-                screen.blit(score, (x, y + 30 * (list(scores.keys()).index(player_id) + 1)))
+            self._leaderboard_cache = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:top_n]
+            self._leaderboard_mtime = mtime
         except FileNotFoundError:
-            pass
+            self._leaderboard_cache = []
+            self._leaderboard_mtime = None
         except json.JSONDecodeError:
-            pass
+            self._leaderboard_cache = []
+            self._leaderboard_mtime = None
+
+    def show_score(self, x, y, font, screen, filename=DEFAULT_LEADERBOARD_FILE, top_n=5):
+        self._refresh_leaderboard_cache(filename=filename, top_n=top_n)
+        screen.blit(font.render("LEADERBOARD", True, (255, 255, 255)), (x, y))
+        for idx, (player_id, score_value) in enumerate(self._leaderboard_cache, start=1):
+            score_text = f"{player_id}: {score_value}"
+            score_surface = font.render(score_text, True, (255, 255, 255))
+            screen.blit(score_surface, (x, y + 30 * idx))
 
     def draw(self, surface):
         # Päivitä layout aina ennen piirtämistä, jos ikkunan koko on muuttunut
@@ -209,5 +245,4 @@ class MainMenu:
         
         self.show_score(50, 50, pygame.font.Font(None, 36), surface, filename=DEFAULT_LEADERBOARD_FILE, top_n=5)
         
-        self.text_input.handle_event(pygame.event.poll())
         self.text_input.draw(surface)

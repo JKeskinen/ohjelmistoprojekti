@@ -29,6 +29,7 @@ from Physics.box2d_world import Box2DPhysicsWorld, CollisionCategory
 from physics_settings import load_physics_settings
 import planets
 from Audio import pelimusat
+from Valikot.MainMenu import get_current_player_name, clear_current_player_name
 from Meteor.meteor import Meteor
 from Hazards.hazard_system import HazardSystem
 from Tasot.Taso1 import spawn_wave_taso1
@@ -1249,20 +1250,11 @@ class Game:
                     self.boss_clear_menu_delay_remaining = BOSS_EXPLOSION_HOLD_MS
 
         if self.lives <= 0 and self.player_death_menu_delay_remaining is None:
-            try:
-                with open('player_name.txt', 'r') as file:
-                    self.text = file.read().strip()
-            except FileNotFoundError:
-                self.text = ''
+            self.text = get_current_player_name()
             self.leaderboard.add_score(self.text,
                                        self.pistejarjestelma.hae_pisteet())
             self.leaderboard.save_to_file(DEFAULT_LEADERBOARD_FILE)
-            try:
-                with open('player_name.txt', 'w') as file:
-                    # Varmista, että tiedosto on tyhjä ennen seuraavaa peliä.
-                    file.flush()
-            except Exception:
-                pass
+            clear_current_player_name()
 
             if hasattr(self.player, 'is_destroyed'):
                 self.player.is_destroyed = True
