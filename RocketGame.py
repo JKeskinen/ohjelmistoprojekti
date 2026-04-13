@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from Enemies import enemy
 import pygame
 import random
-from Enemies.EnemyAI import StraightEnemy, CircleEnemy, DownEnemy, UpEnemy, ZigZagEnemy, ChaseEnemy
+from Enemies.EnemyAI import StraightEnemy, CircleEnemy, DownEnemy, UpEnemy, ZigZagEnemy, ChaseEnemy, UltimateEnemy
 from Enemies.boss_enemy import BossEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
@@ -886,6 +886,7 @@ class Game:
                 up_enemy_cls=UpEnemy,
                 zigzag_enemy_cls=ZigZagEnemy,
                 chase_enemy_cls=ChaseEnemy,
+                ultimate_enemy_cls=UltimateEnemy,
             )
             if handled:
                 return
