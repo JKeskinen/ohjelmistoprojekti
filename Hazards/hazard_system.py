@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 
 import pygame
+from Audio import pelimusat
 
 
 DEFAULT_HAZARD_CONFIG = {
@@ -752,6 +753,11 @@ class HazardSystem:
             damage_event = bomb.consume_explosion_damage()
             if damage_event is None:
                 continue
+
+            # TOISTA POMMIN RÄJÄHDYS-ÄÄNI
+            if pelimusat.game_sounds:
+                pelimusat.game_sounds.play_sfx("bomb_explosion")
+        
 
             max_radius = float(damage_event["radius"]) * float(self.config["shockwave_max_radius_mult"])
             self.shockwaves.append(
