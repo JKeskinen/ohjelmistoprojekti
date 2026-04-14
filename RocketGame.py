@@ -1,8 +1,29 @@
 """
-Module: RocketGame.py
-Dependencies: pygame, os, random, SpriteSettings, PLAYER_LUOKAT.Player (Player), EnemyAI (StraightEnemy, CircleEnemy), Enemies.boss_enemy (BossEnemy), Points
-Provides: main game loop, loads sprites and spawns enemies/boss, handles collisions and draws
-Uses: EnemyHelpers for specific explosion spawn when needed
+================================================================================
+                    ROCKETGAME.PY - PELAPELIN PÄÄMODUULI
+================================================================================
+KUVAUS:
+    TÄMÄ MODUULI SISÄLTÄÄ PELAPELIN PÄÄSILMUKAN JA PELOKSITIN LOGIIKAN.
+    HALLITSEE PELAAJAA, VIHOLLISIA, AMMUKSIA, TÖRMÄYKSIÄ JA PELIN KOKONAISUUTTA.
+    SISÄLTÄÄ GAME-LUOKAN, JOKA HALLITSEE KAIKKEA PELITAPAHTUMAA.
+    
+RIIPPUVAIKSUUDET:
+    - pygame, os, random, SpriteSettings
+    - PLAYER_LUOKAT.Player (Pelaaja)
+    - EnemyAI (StraightEnemy, CircleEnemy, DownEnemy, UpEnemy, ZigZagEnemy, ChaseEnemy, UltimateEnemy)
+    - Enemies.boss_enemy (BossEnemy)
+    - Points (Pistejärjestelmä)
+    - Physics.box2d_world (Fysiikkamoottori)
+    - Hazards.hazard_system (Vaaratekijät)
+    - Collision.collisions (Törmäys-ilmaisu)
+    
+TARJOAA:
+    - Game-luokka: Pääpeli-objekti
+    - Pelisilmukka: Päivitys ja piirto
+    - Vihollisten spawnaimi: Aaltojen hallinta
+    - Törmäys-käsittely: Pelaaja, viholliset, ammukset
+    - Kannusteympäristö: Fysiikka, kamera, HUD
+================================================================================
 """
 
 import sys
@@ -53,23 +74,43 @@ except ImportError:
     spawn_wave_test2 = None
 
 from States.GameStateManager import GameStateManager
-# Näytön/HUD perusmitat
-DEFAULT_VIEW_SIZE = (1600, 800)
-HEALTH_ICON_SIZE = (600, 200)
-HEALTH_ICON_MARGIN = 16
+# ============================================================================
+# PELIPELIN VAKIOT JA PERUSMITAT
+# ============================================================================
+# Näytön ja HUD:n perusmitat
+DEFAULT_VIEW_SIZE = (1600, 800)  # PELIN OLETUSNÄYTÖN KOKO (LEVEYS, KORKEUS)
+HEALTH_ICON_SIZE = (600, 200)     # PELAAJAN TERVEYSPALKIN KUVAKOKO
+HEALTH_ICON_MARGIN = 16           # TERVEYSPALKIN MARGINAALI NÄYTÖN REUNASTA
 
-# Hitbox-koko per tyyppi
-HITBOX_SIZE_PLAYER = (64, 64)
-HITBOX_SIZE_ENEMY = (48, 48)
-HITBOX_SIZE_BOSS = (140, 140)
-BOSS_EXPLOSION_HOLD_MS = 900
-PLAYER_DEATH_HOLD_MS = 1100
-PLAYER_DEATH_EXPLOSION_FPS = 12
-PLAYER_DESTROYED_FRAME_MS = 95
+# Hitbox-koot eri objekteille - TÖRMÄYSALUEITA VARTEN
+HITBOX_SIZE_PLAYER = (64, 64)     # PELAAJAN TÖRMÄYSALUE
+HITBOX_SIZE_ENEMY = (48, 48)      # VIHOLLISEN TÖRMÄYSALUE
+HITBOX_SIZE_BOSS = (140, 140)     # POMON TÖRMÄYSALUE
+
+# AIKAVÄLIT JA KUVATAAJUUDET - MILLISEKUNTEISSA
+BOSS_EXPLOSION_HOLD_MS = 900      # POMON EXPLOSION-ANIMAATION KESTO
+PLAYER_DEATH_HOLD_MS = 1100       # PELAAJAN KUOLEMA-NÄYTÖN KESTO
+PLAYER_DEATH_EXPLOSION_FPS = 12   # PELAAJAN KUOLEMA-EXPLOSION KUVATAAJUUS
+PLAYER_DESTROYED_FRAME_MS = 95    # PELAAJAN DESTRUCTION-FRAME AIKA
 
 
+# ============================================================================
+# APUFUNKTIOT
+# ============================================================================
 def apply_hitbox(obj, size=None):
-    """Asettaa objektin hitboxin ja collision_radiusin"""
+    """
+    ASETTAA OBJEKTIN TÖRMÄYSALUEEN (HITBOX) JA COLLISION-RADIUKSEN.
+    
+    PARAMETRIT:
+        obj  : OBJEKTI JOLLE HITBOX ASETETAAN
+        size : TUPLE (LEVEYS, KORKEUS) HITBOXILLE (JOS None, OHITETAAN)
+    
+    LOGIIKKA:
+        1. LASKE OBJEKTIN KESKIPISTE
+        2. ASETA HITBOXIN KOKO
+        3. KESKITÄ UUSI HITBOX VANHAN PAIKAN MUKAAN
+        4. LASKE COLLISION-RADIUS MAX(LEVEYS, KORKEUS) PERUSTEELLA
+    """
     if size is None:
         return
     c = obj.rect.center
@@ -84,10 +125,39 @@ def apply_hitbox(obj, size=None):
         pass
 
 
+# ============================================================================
+# PELAPELIN PÄÄLUOKKA - GAME
+# ============================================================================
 class Game:
-    """Modulaarinen RocketGame-luokka, ohjattavissa PlayState kautta"""
+    """
+    PELAPELIN PÄÄLUOKKA - HALLITSEE KOKO PELISILMUKKAA JA PELILOGIIKKA.
+    MODUULAARISUUS: OHJATTAVISSA PlayState-luokan KAUTTA.
+    
+    SISÄLTÄÄ:
+        - Peliobjektit: PELAAJA, VIHOLLISET, BOSSI, AMMUKSET
+        - Fysiikkamoottori: Box2D-integraatio
+        - Törmäys-käsittely: PELAAJA-VIHOLLISET, AMMUKSET, VAARATEKIJÄT
+        - Kamera: SEURAA PELAAJAA
+        - HUD: NÄYTTÄÄ PELAAJAN TILAN, PISTEET
+        - AALTOJEN HALLINTA: SPAWN-LOGIIKKA TASOITTAIN
+    """
 
     def __init__(self, screen, level_number=1):
+        """
+        ALUSTA PELAPELIN PÄÄLUOKKA.
+        
+        PARAMETRIT:
+            screen       : PYGAME SURFACE (NÄYTTÖ JOHON PIIRRETÄÄN)
+            level_number : TASON NUMERO (1-5, 0=TestLevel, 6=TestLevel2)
+        
+        LOGIIKKA:
+            1. ALUSTA NÄYTÖN PARAMETRIT JA KAMERA
+            2. LATAA PELIRESURSSIT: KUVAT, PLANEETAT, TAUSTAT
+            3. ALUSTA FYSIIKKAMOOTTORI (Box2D) JA TÖRMÄYSIS-JÄRJESTELMÄ
+            4. LUO PELAAJA, VIHOLLISTEN JÄRJESTELMÄ, POMMIT JA VAARATEKIJÄT
+            5. ALUSTA PISTEJÄRJESTELMÄ JA LEADERBOARD
+            6. SPAWN ENSIMMÄINEN AALTO VIHOLLISIA
+        """
         self.screen = screen
         self.view_width, self.view_height = DEFAULT_VIEW_SIZE
         self.health_icon_scale_size = HEALTH_ICON_SIZE
@@ -262,8 +332,17 @@ class Game:
         # Alusta pelaaja ja ensimmäinen wave
         self.init_game_objects()
 
+    # ============================================================================
+    # NÄYTÖN JA KAMERAN HALLINTA
+    # ============================================================================
     def _refresh_view_metrics(self):
-        """Sync cached viewport/HUD metrics from current render target size."""
+        """
+        SYNKRONOI NÄYTÖN KOKO JA HUD-METRIIKAT NYKYISEEN NÄYTTÖ-KOKOON.
+        PÄIVITÄ KAMERA JA TERVEYSPALKIN METRIIKAT.
+        
+        PALAUTTAA:
+            bool : TRUE JOS NÄYTÖN KOKO MUUTTUI, MUUTEN FALSE
+        """
         old_w = int(getattr(self, "view_width", 0))
         old_h = int(getattr(self, "view_height", 0))
         w, h = self.screen.get_size()
@@ -284,7 +363,15 @@ class Game:
         return old_w != self.view_width or old_h != self.view_height
 
     def _rescale_assets_for_view(self):
-        """Resize view-dependent assets after display mode/size changes."""
+        """
+        SKAALA NÄYTÖSTÄ RIIPPUVAISET RESURSSIT UUDELLA NÄYTÖN KOOLLA.
+        KUTSUTAAN KUN NÄYTÖN KOKO MUUTTUU.
+        
+        SKAALAUS:
+            - TAUSTA: SKAALAA UUTEEN NÄYTÖN KOKOON
+            - TERVEYSPALKKIEN KUVAT: SKAALAA UUSIIN METRIIKOIHIN
+            - KAMERA-RAJA: PÄIVITÄ KAMERAN LIIKKUMISEN RAJOIKSI
+        """
         if hasattr(self, "tausta_source") and self.tausta_source is not None:
             self.tausta = pygame.transform.scale(self.tausta_source, (self.view_width, self.view_height))
             self.tausta_leveys, self.tausta_korkeus = self.tausta.get_size()
@@ -312,8 +399,22 @@ class Game:
         self.camera_x = max(0, min(self.camera_x, max_cam_x))
         self.camera_y = max(0, min(self.camera_y, max_cam_y))
 
+    # ============================================================================
+    # RESURSSIEN LATAUS
+    # ============================================================================
     def _load_assets(self):
-        """Lataa tausta, vihollisten kuvat ja planeetat"""
+        """
+        LATAA KAIKKI PELIRESURSSIT LEVYLTÄ: KUVAT, ANIMAATIOT, ÄÄNET.
+        
+        LATAA:
+            - TAUSTA (AVARUUSKUVAT)
+            - VIHOLLISTEN KUVAT (64x64)
+            - POMON KUVAT - TASO-KOHTAISET
+            - PLANEETAT (KORISTELU-ELEMENTIT)
+            - PELAAJAN TERVEYSPALKKIEN KUVAT (0-5 HP)
+            - VIHOLLISTEN TERVEYSPALKKIEN KUVAT
+            - EXPLOSION-ANIMAATIOT
+        """
         base_path = os.path.dirname(__file__)
         self.base_path = base_path
         self.tausta_source = pygame.image.load(os.path.join(base_path,'images','taustat','avaruus.png')).convert()
@@ -393,8 +494,21 @@ class Game:
         except Exception:
             pass
 
+    # ============================================================================
+    # PELAAJAN JA PELIN OBJEKTIEN ALUSTUS
+    # ============================================================================
     def init_game_objects(self):
-        """Alusta pelaaja, pistejärjestelmä ja ensimmäinen wave"""
+        """
+        ALUSTA PELAPELIN OBJEKTIT: PELAAJA, PISTEJÄRJESTELMÄ, ENSIMMÄINEN AALTO.
+        
+        LOGIIKKA:
+            1. LUO PISTEJÄRJESTELMÄ (RUUMUSTEITA KERÄTÄÄN HERE)
+            2. LUO PELAAJA (FIGHTER-ALUS, KESKELLA, MAX HEALTH=5)
+            3. ASETA PELAAJAN TÖRMÄYSALUE
+            4. ALUSTA PELAAJAN FYSIIKKA (Box2D)
+            5. ASETA ELÄMÄT PELAAJAN TERVEYDESTÄ
+            6. SPAWN ENSIMMÄINEN AALTO VIHOLLISIA
+        """
         self.pistejarjestelma = Points()
 
         player_ship = 'FIGHTER'
@@ -412,6 +526,15 @@ class Game:
         self.spawn_wave(self.current_wave)
 
     def _init_player_physics(self):
+        """
+        ALUSTA PELAAJAN FYSIIKKA-BODY (Box2D).
+        
+        LOGIIKKA:
+            1. POISTA VANHA BODY JOS OLEMASSA
+            2. LUO UUSI CIRCLE-BODY PELAAJALLE (RADIUS, MASSA, DYNAAMINEN)
+            3. ASETA FYSIIKKAPROFIILI (NOPEUS, KÄÄNTYMINEN, HIDASTUS)
+            4. KERROIN NOPEUTEEN JA KÄÄNTYMISVOIMAAN USER-PROFIILISTA
+        """
         if self.physics_world is None or self.player is None:
             return
 
@@ -448,6 +571,14 @@ class Game:
         self.player.bind_box2d_body(body)
 
     def _apply_player_knockback(self, direction, speed_px_per_s, blend_with_current=0.55):
+        """
+        KAYTA PELAAJALLE LYONNIN VOIMA YLO SUUNTAAN.
+        
+        PARAMETRIT:
+            direction : KAUPU-SUUNTA (VEKTORI)
+            speed_px_per_s : NOPEUSVOIMA PIKSELEI_PER_S
+            blend_with_current : SEKOITUSPROSENTTI NYKYISEN NOPEUDEN KANSSA
+        """
         knockback = pygame.Vector2(direction) * float(speed_px_per_s)
         current = pygame.Vector2(getattr(self.player, 'vel', pygame.Vector2(0, 0)))
         blend = max(0.0, min(1.0, float(blend_with_current)))
@@ -465,7 +596,13 @@ class Game:
                 )
 
     def _add_velocity_to_entity(self, entity, push_vec):
-        """Apply a velocity push to entity types used in gameplay."""
+        """
+        LISAA NOPEUSTYONTO ENTITEETIN NOPEUDEN.
+        
+        PARAMETRIT:
+            entity : OBJEKTI JOLLE NOPEUS LISATAAN
+            push_vec : NOPEUSVOIMA (VEKTORI)
+        """
         push = pygame.Vector2(push_vec)
         if push.length_squared() <= 1e-6:
             return
@@ -488,6 +625,12 @@ class Game:
                 pass
 
     def _apply_shockwaves_from_hazards(self, waves):
+        """
+        LEVITA AANKALYONNIT VAARATEKIJOISTA KOHTI PELAAJAA, VIHOLLISIA JA METEOREITA.
+        
+        PARAMETRIT:
+            waves : LISTA LAALLOJEN KAAVIOISTA
+        """
         if not waves:
             return
 
@@ -538,9 +681,22 @@ class Game:
                     self._add_velocity_to_entity(bullet, d_b * (strength * i_b * 0.22))
 
     def _start_enemy_calm_period(self):
+        """
+        ALOITA RAUHOITUSPERIODI VIHOLLISILLE.
+        VIHOLLISTEN AMPUMINEN TAUOTETAAN.
+        """
         self.enemy_calm_timer_ms = max(self.enemy_calm_timer_ms, self.enemy_calm_duration_ms)
 
     def _spawn_test2_meteor_from_side(self, side, tier, speed_min, speed_max):
+        """
+        SPAWN METEORI TASO-2 YHDELTÄ SIVULTA.
+        
+        PARAMETRIT:
+            side : SPAWN-SIVU (left, right, top)
+            tier : METEORIN TASO (1-3)
+            speed_min : MINIMI NOPEUS
+            speed_max : MAKSIMI NOPEUS
+        """
         if self.hazard_system is None:
             return
 
@@ -567,6 +723,10 @@ class Game:
         self.hazard_system.spawn_meteor(tier=int(tier), center=(x, y), velocity=(vx, vy))
 
     def _update_test2_meteor_showers(self, dt_ms):
+        """
+        PÄIVITÄ TESTLEVEL-2 METEORISATEET.
+        VAIHEET: IDLE -> WARNING -> BURST -> IDLE
+        """
         if not self.is_test2_level or self.hazard_system is None:
             return
 
@@ -623,7 +783,9 @@ class Game:
                 self._test2_shower_cd_ms = random.randint(9000, 15000)
 
     def _ensure_boss_bomb_hazards(self):
-        """Enable boss bomb drops on normal levels without enabling meteor hazards."""
+        """
+        VARMISTA ETTA BOSSIN POMMIT ON KAYTOSSA NORMAALILLA TASOLLA.
+        """
         if self.hazard_system is not None:
             return
         if self.is_test_level or int(self.level_number) == 3:
@@ -651,6 +813,10 @@ class Game:
         )
 
     def _start_boss_storm_phase(self):
+        """
+        ALOITA POMON MYRSKY-VAIHE (TestLevel -spesifisesti).
+        POMO PIILOUTUU JA METEOREJA PUTOAA PALJON.
+        """
         if not self.is_test_level or self.hazard_system is None or self.boss is None:
             return
         if self._boss_storm_active:
@@ -667,6 +833,9 @@ class Game:
             self.enemies.remove(self.boss)
 
     def _end_boss_storm_phase(self):
+        """
+        LOPETA POMON MYRSKY-VAIHE JA PALAUTA POMO PAIKALLE.
+        """
         self._boss_storm_active = False
         self._boss_storm_hide_remaining_ms = 0
         self._boss_storm_spawn_timer_ms = 0
@@ -685,6 +854,9 @@ class Game:
             self.enemies.append(self.boss)
 
     def _spawn_storm_meteor(self):
+        """
+        SPAWNA YKSITTAINEN METEORI POMON MYRSKY-VAIHEESTA.
+        """
         if self.hazard_system is None:
             return
         x = random.uniform(40, max(41, self.tausta_leveys - 40))
@@ -697,6 +869,10 @@ class Game:
         self.hazard_system.spawn_meteor(tier=tier, center=start, velocity=velocity)
 
     def _update_boss_storm_phase(self, dt_ms):
+        """
+        PÄIVITÄ BOSSIN MYRSKY-VAIHE (TestLevel).
+        
+        """
         if not self.is_test_level or self.hazard_system is None or self.boss is None:
             return
         if int(getattr(self.boss, 'hp', 0)) <= 0:
@@ -727,6 +903,10 @@ class Game:
             self._start_boss_storm_phase()
 
     def _calm_nearby_enemies(self, center, radius_px=260.0, cooldown_seconds=1.8):
+        """
+        RAUHOITA LAHELLA OLEVAT VIHOLLISET LYONNIN JALKEEN.
+        VAHENTAA NIIDEN AMPUMISNOPEUTTA HETEKSI.
+        """
         c = pygame.Vector2(center)
         r2 = float(radius_px) * float(radius_px)
         for enemy in self.enemies:
@@ -738,6 +918,10 @@ class Game:
                 enemy.hit_player_cooldown = max(float(getattr(enemy, 'hit_player_cooldown', 0.0)), float(cooldown_seconds))
 
     def _draw_physics_overlay(self, screen):
+        """
+        PIIRTA FYSIIKKA-DEBUG-TIEDOT NAYTTOLLE (JOS OPTION PAALLA).
+        NAYTTAA FPS:N, FYSIIKKA-AJAN, KONTAKTIEN MAARAN.
+        """
         if not self.show_physics_stats:
             return
         lines = [
@@ -756,6 +940,10 @@ class Game:
             y += 18
 
     def _get_enemy_velocity(self, enemy):
+        """
+        HAKEE VIHOLLISEN NOPEUSVEKTORI (VEL TAI VX_VY).
+        PALAUTTAA PYGAME.VECTOR2-MUODOSSA.
+        """
         vel = getattr(enemy, 'vel', None)
         if vel is not None:
             try:
@@ -767,6 +955,9 @@ class Game:
         return pygame.Vector2(vx, vy)
 
     def _get_enemy_render_forward(self, enemy, vel):
+        """
+        HAKEE VIHOLLISEN SUUNNAN (GRAPHICS-SUUNTA).
+        """
         try:
             ang = float(getattr(enemy, 'display_angle', 0.0))
             forward = pygame.Vector2(math.cos(ang + math.pi / 2), math.sin(ang + math.pi / 2))
@@ -780,6 +971,10 @@ class Game:
         return pygame.Vector2(1, 0)
 
     def _draw_enemy_facing_debug(self, screen):
+        """
+        PIIRTA VIHOLLISEN NAEMYSSIJOITUKSEN DEBUG-NUOLET NAYTTOLLE.
+        PUNAINEN: VASTAINKOHTA, VIHR: OIKEA VASTOIN NOPEUDEN KANSSA.
+        """
         if not self.DEBUG_DRAW_ENEMY_FACING:
             return
 
@@ -819,8 +1014,20 @@ class Game:
             txt = self.enemy_debug_font.render(label, True, txt_color)
             screen.blit(txt, (int(p0.x + 12), int(p0.y - 18)))
 
+    # ============================================================================
+    # PELIN UUDELLEENKÄYNNISTYS
+    # ============================================================================
     def reset_game(self):
-        """Resettaa pelin tilan ja pelaajan"""
+        """
+        UUDELLEENKÄYNNISTÄ PELAPELI: NOLLAA TILA JA PELAAJAN.
+        
+        LOGIIKKA:
+            1. NOLLAA KAIKKI PELIMUUTTUJAT (AALTO, VIHOLLISET, AMMUKSET)
+            2. NOLLAA BOSS-VAIHE JA TESTILEVEL-STAATUKSET
+            3. ASETA PELAAJAN HP MAKSIMIIN
+            4. TYHJENNÄ KAIKKI OBJEKTIT NÄYTÖILTÄ
+            5. ALUSTA PELAAJA UU- JA SPAWN ENSIMMÄINEN AALTO
+        """
         self._boss_storm_active = False
         self._boss_storm_next_ms = None
         self._boss_storm_hide_remaining_ms = 0
@@ -859,8 +1066,22 @@ class Game:
         self.pistejarjestelma = Points()
         pygame.event.clear()
 
+    # ============================================================================
+    # VIHOLLISTEN AALTOJEN HALLINTA JA SPAWNAIMI
+    # ============================================================================
     def spawn_wave(self, wave_num):
-        """Spawnaa viholliset wave-numeroon ja level-numeroon perustuen"""
+        """
+        SPAWN VIHOLLISET AALTO-NUMERON JA TASON NUMERON PERUSTEELLA.
+        
+        PARAMETRIT:
+            wave_num : AALLON NUMERO (1, 2, 3, 4=BOSS)
+        
+        LOGIIKKA:
+            1. TYHJENNÄ VANHA VIHOLLISET-LISTA
+            2. VALITSE OIKEA SPAWNA-FUNKTIO TASON PERUSTEELLA
+            3. KUTSU TASO-KOHTAINEN SPAWN-FUNKTIO
+            4. JOS EI KOHTAA, ÄLÄ SPAWN MITÄÄN (FALLBACK)
+        """
         self.enemies.clear()
 
         # Dispatch to correct level's spawn function
@@ -899,12 +1120,22 @@ class Game:
         # Fallback: if no level handler or unhandled wave, spawn nothing
         # (Level 2-5 will use their own spawn logic when implemented)
 
+    # ============================================================================
+    # PELAAJAN VAHINGON KÄSITTELY
+    # ============================================================================
     def apply_damage(self, damage_amount):
         """
-        Apply damage to player, first reducing armor, then health.
+        KÄSITTELE PELAAJALLE OTETTU VAHINKO: ENSIN PANSSARI, SITTEN TERVEMET.
         
-        Args:
-            damage_amount: Amount of damage to apply (default 1)
+        PARAMETRIT:
+            damage_amount : VAHINGON MÄÄRÄ (OLETUKSENA 1)
+        
+        LOGIIKKA:
+            1. TARKISTA PELAAJAN PANSSARI (ARMOR)
+            2. JOS PANSSARI > 0, VÄ HENÄ PANSSARIA ENSIN
+            3. JÄLJELLÄ OLEVA VAHINKO MEILLÄ TERVEYDELLE
+            4. JOS EI PANSSARIA, SUORA TERVEYSVAHINKO
+            5. SYNC LIVES-MUUTTUJA PELAAJAN TERVEYTEEN
         """
         if not self.player:
             return
@@ -927,8 +1158,25 @@ class Game:
         
         self.lives = int(self.player.health)
 
+    # ============================================================================
+    # PELIN PÄÄSILMUKKA - PÄIVITYS JA LOGIIKKA
+    # ============================================================================
     def update(self, events):
-        """Päivitä pelilogiikka: pelaaja, viholliset, ammukset, collisionit jne."""
+        """
+        PÄIVITÄ PELILOGIIKKA JOKA FRAMESSA.
+        
+        PARAMETRIT:
+            events : PYGAME-TAPAHTUMAT (NÄPPÄIMISTÖ, HIIRI, yms.)
+        
+        LOGIIKKA:
+            1. PÄIVITÄ DELTATIME JA NÄYTÖN METRIIKAT
+            2. PÄIVITÄ KAMERA JA MILJÖÖ (PLANEETAT)
+            3. PÄIVITÄ PELAAJA JA FYSIIKKAMOOTTORI
+            4. PÄIVITÄ VIHOLLISET JA NIIDEN AMMUKSET
+            5. KÄSITTELE KAIKKI TÖRMÄYKSET JA VAHINGOT
+            6. TARKISTA AALLON PÄÄTTYMINEN JA AALLON ETENNEMINEN
+            7. TARKISTA PELAAJAN KUOLEMA JA PELIN LOPPU
+        """
         frame_start = time.perf_counter()
         self.dt = self.clock.tick(60)
         self.game_time += self.dt / 1000.0  # Track cumulative game time for item drops
@@ -950,7 +1198,9 @@ class Game:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
                 self.DEBUG_DRAW_ENEMY_FACING = not self.DEBUG_DRAW_ENEMY_FACING
 
-        # Päivitä planeetat ja pelaaja
+        # ========================================================================
+        # PELIOBJEKTIEN PAIVITYS
+        # ========================================================================
         planets.update_planet(self.dt)
         self.player.update(self.dt)
 
@@ -966,7 +1216,10 @@ class Game:
         if self.enemy_calm_timer_ms > 0:
             self.enemy_calm_timer_ms = max(0, self.enemy_calm_timer_ms - self.dt)
 
-        # Kamera pelaajan ympärillä
+        # ========================================================================
+        # KAMERA JA VIHOLLISTEN PAIVITYS
+        # ========================================================================
+        # KAMERA PELAAJAN YMPARILLA
         self.camera_x = max(0, min(self.player.rect.centerx - self.view_width // 2, self.tausta_leveys - self.view_width))
         self.camera_y = max(0, min(self.player.rect.centery - self.view_height // 2, self.tausta_korkeus - self.view_height))
 
@@ -989,6 +1242,9 @@ class Game:
                 if getattr(meteor, 'dead', False):
                     self.meteors.remove(meteor)
 
+        # ========================================================================
+        # AMMUKSIEN KASITTELY - PELAAJAN JA VIHOLLISTEN AMMUKSET
+        # ========================================================================
         # Ammukset
         for bullet in list(self.player.weapons.bullets):
             hit_enemy_bullet = False
@@ -1016,7 +1272,9 @@ class Game:
                         self.player.weapons.bullets.remove(bullet)
 
                     if isinstance(enemy, BossEnemy):
-                        damage = getattr(bullet, "damage", 1)
+                        base_damage = getattr(bullet, "damage", 1)
+                        bonus_damage = self.player.damage_bonus * 0.5 if self.player else 0
+                        damage = int(min(3.0, base_damage + bonus_damage))
                         died = enemy.take_hit(damage)
 
                         if died:
@@ -1036,7 +1294,9 @@ class Game:
                             self.explosion_manager.spawn_hit(impact_pos, fps=24)
 
                     else:
-                        damage = getattr(bullet, "damage", 1)
+                        base_damage = getattr(bullet, "damage", 1)
+                        bonus_damage = self.player.damage_bonus * 0.5 if self.player else 0
+                        damage = int(min(3.0, base_damage + bonus_damage))
 
                         if hasattr(enemy, "hp"):
                             enemy.hp -= damage
@@ -1218,6 +1478,9 @@ class Game:
             # Shockwave ring pushes nearby entities in an outward wavefront.
             self._apply_shockwaves_from_hazards(hazard_effects.get("shockwaves", []))
 
+        # ========================================================================
+        # VIHOLLISEN JA PELAAJAN KONTAKTI-TORMAYKSET
+        # ========================================================================
         # Kontakti-osuma vihollisen ja pelaajan välillä cooldownilla.
         if self.enemy_hit_cooldown <= 0 and self.lives > 0 and self.player_death_menu_delay_remaining is None:
             for enemy in self.enemies:
@@ -1274,6 +1537,9 @@ class Game:
             self.enemy_hit_cooldown -= self.dt
         
 
+        # ========================================================================
+        # WAVE HALLINTA - PAATTYMINEN JA ETENEMINEN
+        # ========================================================================
         # Wave progression: wave 1 -> 2 -> 3 -> boss (4).
         # Taso 3 uses meteor hazards; they do not block wave advancement.
         meteors_cleared = len(self.meteors) == 0
@@ -1292,6 +1558,9 @@ class Game:
                 if self.boss_clear_menu_delay_remaining is None:
                     self.boss_clear_menu_delay_remaining = BOSS_EXPLOSION_HOLD_MS
 
+        # ========================================================================
+        # PELAAJAN KUOLEMA JA PELIN LOPETUS
+        # ========================================================================
         if self.lives <= 0 and self.player_death_menu_delay_remaining is None:
             self.text = get_current_player_name()
             self.leaderboard.add_score(self.text,
@@ -1339,6 +1608,7 @@ class Game:
             # Käsittele keräillyt itemit
             if collected_items and self.player:
                 for item_type, item_value in collected_items:
+                    print(f"[ITEM COLLECTED] Type: {item_type}, Value: {item_value}")
                     if item_type == "health":
                         # Restoraa health +2
                         self.player.health = min(self.player.max_health, self.player.health + item_value)
@@ -1367,7 +1637,8 @@ class Game:
                         # Player speed boost (10 sec, +25% movement)
                         self.player_speed_boost_time = max(self.player_speed_boost_time, item_value)
                     elif item_type == "enemy_destroy":
-                        # NUKE: Destroy all enemies on screen
+                        # NUKE: Destroy all enemies on screen (including boss!)
+                        print(f"[NUKE DEBUG] NUKE ACTIVATED! Enemies before: {len(self.enemies)}, Boss: {self.boss is not None}")
                         for enemy in list(self.enemies):
                             self.explosion_manager.spawn_enemy(enemy.rect.center, fps=20)
                             try:
@@ -1379,6 +1650,8 @@ class Game:
                                 self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
                             self.enemies.remove(enemy)
                             self.pistejarjestelma.lisaa_piste(2)  # Bonus points for nuke kills
+                        
+                        print(f"[NUKE DEBUG] NUKE: All enemies destroyed. Enemies after: {len(self.enemies)}")
 
         if self.boss_clear_menu_delay_remaining is not None:
             self.boss_clear_menu_delay_remaining -= self.dt
@@ -1395,7 +1668,22 @@ class Game:
         self.physics_metrics['frame_ms'] = (time.perf_counter() - frame_start) * 1000.0
 
     def draw(self, target_screen):
-        """Piirrä kaikki peliobjektit annettuun ruutuun"""
+        """
+        PIIRTA KAIKI PELIOBJEKTIT ANNETTUUN RUUTUUN KAMERAN PERUSTEELLA.
+        
+        PARAMETRIT:
+            target_screen : PYGAME SURFACE JOHON PIIRRETAAN
+        
+        LOGIIKKA:
+            1. PIIRTA TAUSTA JA PLANEETAT
+            2. PIIRTA METEORIT (JOS KAYTOSSA)
+            3. PIIRTA VIHOLLISET JA BOSSIN TERVEYSPALKIT
+            4. PIIRTA VIHOLLISET AMMUKSET JA PYSSYN SUULAKKEET
+            5. PIIRTA ITEMIT
+            6. PIIRTA PELAAJA JA EXPLOSION-ANIMAATIOT
+            7. PIIRTA HUD: PISTEET, TERVEYSPALKIT, BOOST, ARMOR, DMG
+            8. PIIRTA DEBUG-INFOT (JOS PAALLA): VIHOLLISTEN SUUNTA, FYSIIKKA
+        """
         self.screen = target_screen
         if self._refresh_view_metrics():
             self._rescale_assets_for_view()
@@ -1453,34 +1741,66 @@ class Game:
         self._draw_physics_overlay(self.screen)
 
 
-# Compatibility bridge for old function-style callers.
+# ============================================================================
+# LEGACY-YHTEENSOPIVUUSOSIO - VANHOJEN FUNKTIO-TYYLISEN KUTSUJEN TUKI
+# ============================================================================
+# GLOBAALI SAILIÖ AKTIIVISELLE GAME-INSTANSSILLE
 _active_game = None
 
 
 def init(screen):
-    """Initialize a single active Game instance for legacy callers."""
+    """
+    ALUSTA YKSITTÄINEN AKTIIVINEN GAME-INSTANCE LEGACY-KUTSUILLE.
+    
+    PARAMETRIT:
+        screen : PYGAME SURFACE -NÄYTTÖ
+    
+    PALAUTTAA:
+        Game : LUOTU GAME-OBJEKTI
+    """
     global _active_game
     _active_game = Game(screen)
     return _active_game
 
 
 def update(events):
-    """Update active Game instance if initialized."""
+    """
+    PÄIVITÄ AKTIIVINEN GAME-INSTANCE (JOS ALUSTETTU).
+    
+    PARAMETRIT:
+        events : PYGAME-TAPAHTUMAT
+    """
     if _active_game is not None:
         _active_game.update(events)
 
 
 def draw(screen):
-    """Draw active Game instance if initialized."""
+    """
+    PIIRRA AKTIIVINEN GAME-INSTANCE (JOS ALUSTETTU).
+    
+    PARAMETRIT:
+        screen : PYGAME SURFACE -NÄYTTÖ
+    """
     if _active_game is not None:
         _active_game.draw(screen)
 
 
 def is_running():
-    """Return whether active Game instance is running."""
+    """
+    TARKISTA ONKO AKTIIVINEN GAME-INSTANCE KÄYNNISSÄ.
+    
+    PALAUTTAA:
+        bool : TRUE JOS PELI ON KÄYNNISSÄ
+    """
     return _active_game is not None and bool(_active_game.running)
 
 
 def get_active_game():
-    """Expose active game for code that still needs direct access."""
+    """
+    HAE AKTIIVINEN GAME-INSTANSSI SUORAAN.
+    KÄYTETÄÄN LEGACY-KOODILLE, JOKA TARVITSEE SUORAN PÄÄSYN.
+    
+    PALAUTTAA:
+        Game : AKTIIVINEN GAME-OBJEKTI TAI NONE
+    """
     return _active_game

@@ -1,8 +1,16 @@
 """
-ItemSpawn - Item spawn system for RocketGame.
+================================================================================
+                    ITEMSPAWN - ITEMIEN SPAWNAUS-JÄRJESTELMÄ
+================================================================================
+KUVAUS:
+    HALLITSEE KAIKKIEN ITEMIEN SPAWNAAMISTA VIHOLLISTEN JA BOSSIEN KUOLEMASTA.
+    HEALTH, ARMOR, DAMAGE, SPEED BOOST JA NUKE.
 
-Handles health pickups, power-ups, and other collectibles that drop from enemies/bosses.
-Supports different drop types, spawn rates, and animations.
+PÄÄLUOKAT:
+    - ItemSpawner : ITEMIEN HALLINTA JA SPAWNAUS
+    - Item        : YKSITTÄINEN ITEM-SPRITE ANIMAATIOLLA
+
+================================================================================
 """
 
 import os
@@ -13,16 +21,13 @@ import math
 
 class ItemSpawner:
     """
-    Manages spawning of collectible items in the game.
-    
-    Supports:
-    - Health pickups (small, medium, large)
-    - Shield items
-    - Weapon power-ups
-    - Score multipliers
-    - Customizable drop rates and animations
+    ITEMSPAWNER - HALLITSEE KAIKKIEN ITEMIEN SPAWNAAMISEN PELISSA.
+    VASTAA ITEMIEN LUOMISESTA, KERÄÄMISESTÄ JA ANIMAATIOISTA.
     """
 
+    # ========================================================================
+    # ITEMIEN TYYPIT - MITKÄ BONUKSET PELAAJA VOI SAADA
+    # ========================================================================
     # Item types
     ITEM_HEALTH = "health"                  # +2 health (single health item type)
     ITEM_ARMOR = "armor_bonus"              # +1 armor
@@ -32,6 +37,9 @@ class ItemSpawner:
     ITEM_SPEED_BOOST = "speed_boost"        # +25% movement speed (10 sec)
     ITEM_ENEMY_DESTROY = "enemy_destroy"    # Destroy all enemies (nuke)
 
+    # ========================================================================
+    # SPRITE-POLUT - MISTÄ LÖYTYVÄT ITEMIEN KUVAT
+    # ========================================================================
     # Sprite paths (relative to game folder)
     SPRITE_PATHS = {
         ITEM_ARMOR: "images/Space-Shooter_objects/PNG/Bonus_Items/Armor_Bonus.png",
@@ -39,21 +47,27 @@ class ItemSpawner:
         ITEM_SPEED_DEBUFF: "images/Space-Shooter_objects/PNG/Bonus_Items/Enemy_Speed_Debuff.png",
         ITEM_HEALTH: "images/Space-Shooter_objects/PNG/Bonus_Items/HP_Bonus.png",
         ITEM_SHIELD: "images/Space-Shooter_objects/PNG/Bonus_Items/Barrier_Bonus.png",
-        ITEM_SPEED_BOOST: "images/Space-Shooter_objects/PNG/Bonus_Items/Enemy_Destroy_Bonus.png",
-        ITEM_ENEMY_DESTROY: "images/Space-Shooter_objects/PNG/Bonus_Items/Rockets_Bonus.png",
+        ITEM_SPEED_BOOST: "images/Space-Shooter_objects/PNG/Bonus_Items/Rockets_Bonus.png",
+        ITEM_ENEMY_DESTROY: "images/Space-Shooter_objects/PNG/Bonus_Items/Enemy_Destroy_Bonus.png",
     }
 
+    # ========================================================================
+    # OLETUSKONFIGURAATIO - ITEM-SPAWN ASETUKSET
+    # ========================================================================
     # Default spawn configuration
     DEFAULT_CONFIG = {
-        "enemy_drop_chance": 0.70,           # 70% per enemy kill - VITTU!
-        "enemy_drop_cooldown": 0.8,          # Seconds between drops
-        "boss_drop_interval_min": 3.0,       # Boss drops every 3-5 seconds
+        "enemy_drop_chance": 0.70,           # 70% DROPRATE
+        "enemy_drop_cooldown": 0.8,          # DROP COODOWN
+        "boss_drop_interval_min": 3.0,       # BOSS DROP
         "boss_drop_interval_max": 5.0,
-        "item_fall_speed": 150.0,            # Pixels per second (spawn height to ground)
-        "item_spin_speed": 180.0,            # Degrees per second
-        "item_collection_radius": 50.0,      # Pixels to trigger collection
+        "item_fall_speed": 150.0,            # PUTOAMISNOPEUS PIKSELIÄ/SEKUNTI
+        "item_spin_speed": 180.0,            # SPIN NOPEUS ASTEITA/SEKUNTI
+        "item_collection_radius": 50.0,      # POIMINTARADIUS
     }
 
+    # ========================================================================
+    # DROP-TODENNÄKÖISYYDET - MINKÄ TODENNÄKÖISYYDELLÄ MITÄKIN ITEMIÄ PUTOAA
+    # ========================================================================
     # Drop type probabilities (when item drops, which type)
     DROP_PROBABILITIES = {
         ITEM_ARMOR: 0.55,              # 55% - Armor bonus (common)
@@ -65,17 +79,23 @@ class ItemSpawner:
         ITEM_ENEMY_DESTROY: 0.02,      # 2% - Destroy all enemies (nuke)
     }
 
+    # ========================================================================
+    # ITEM-ARVOT - KUINKA PALJON BONUSTA KUKIN ITEM ANTAA
+    # ========================================================================
     # Item values/effects
     ITEM_VALUES = {
-        ITEM_HEALTH: 2,             # +2 health (single item type)
-        ITEM_ARMOR: 1,              # +1 armor point
-        ITEM_DAMAGE: 1,             # +1 damage
-        ITEM_SPEED_DEBUFF: 10.0,    # 10 second debuff duration
-        ITEM_SHIELD: 2,             # +2 shield
-        ITEM_SPEED_BOOST: 10.0,     # 10 second speed boost duration
-        ITEM_ENEMY_DESTROY: 1,      # 1 = trigger destroy all
+        ITEM_HEALTH: 2,             # +2 HEALTH POINTS
+        ITEM_ARMOR: 1,              # +1 ARMOR POINTS
+        ITEM_DAMAGE: 1,             # +1 DMG
+        ITEM_SPEED_DEBUFF: 10.0,    # 10 SEKUNTIA DEBUFF ENEMYLLE
+        ITEM_SHIELD: 2,             # +2 ARMOR PISTEET
+        ITEM_SPEED_BOOST: 10.0,     # 10 SEKUNTIA NOPEUSBOOSTIA
+        ITEM_ENEMY_DESTROY: 1,      # 1 = TRIGGERÖI NUKEN. TUHOAA VIHOLLISET, MUTTA EI BOSSIA
     }
 
+    # ========================================================================
+    # ITEMIEN VÄRIT - MIKÄ VÄRI JOKAISELLE ITEMILLE (JOS SPRIITEJA EI LÖYDY)
+    # ========================================================================
     # Item colors and sizes (fallback for items without sprites)
     ITEM_COLORS = {
         ITEM_HEALTH: (255, 0, 0),           # Bright red
@@ -87,6 +107,9 @@ class ItemSpawner:
         ITEM_ENEMY_DESTROY: (255, 0, 0),    # Red nuke
     }
 
+    # ========================================================================
+    # ITEMIEN KOOT - KUINKA ISOJA ITEMIEN SPRIITIT NÄYTTÄVÄT
+    # ========================================================================
     ITEM_SIZES = {
         ITEM_HEALTH: 28,
         ITEM_ARMOR: 28,
@@ -99,11 +122,11 @@ class ItemSpawner:
 
     def __init__(self, config=None, sprite_root=None):
         """
-        Initialize ItemSpawner.
+        ALUSTAA ITEMSPAWNERIN KONFIGURAATIOLLA.
         
-        Args:
-            config: Dict with config overrides (enemy_drop_chance, etc.)
-            sprite_root: Path to sprite assets (optional, for custom graphics)
+        PARAMETRIT:
+            config      : SANAKIRJA KONFIKURAATIOIDEN YLIKIRJOITUS
+            sprite_root : SPRITE-POLKU (VALINNAINEN)
         """
         self.config = {**self.DEFAULT_CONFIG}
         if config:
@@ -121,7 +144,7 @@ class ItemSpawner:
         self._load_bonus_sprites()
 
     def _load_sprites(self):
-        """Load item sprites from disk (optional, for custom graphics)."""
+        """LATAA ITEMIEN SPRITEET LEVYLTÄ (VALINNAINEN)."""
         if not self.sprite_root or not os.path.isdir(self.sprite_root):
             return  # Skip if no sprite root
 
@@ -141,7 +164,7 @@ class ItemSpawner:
                         self.item_sprites[item_type] = frames
 
     def _load_bonus_sprites(self):
-        """Load bonus item sprites from PNG files."""
+        """LATAA BONUS-ITEMIEN SPRITEET PNG-TIEDOSTOISTA."""
         loaded_count = 0
         for item_type, sprite_path in self.SPRITE_PATHS.items():
             if os.path.isfile(sprite_path):
@@ -165,7 +188,7 @@ class ItemSpawner:
         print(f"[itemSpawn] Loaded {loaded_count} item sprites")
     
     def optimize_sprites_for_display(self):
-        """Call this after display is initialized to convert_alpha all sprites for performance."""
+        """OPTIMOI SPRITEET NÄYTÖLLE CONVERT_ALPHA:LLA SUORITUSKYVYN VUOKSI."""
         for item_type, frames in self.item_sprites.items():
             try:
                 self.item_sprites[item_type] = [f.convert_alpha() if not hasattr(f, '_has_converted_alpha') else f for f in frames]
@@ -176,14 +199,14 @@ class ItemSpawner:
 
     def spawn_item_from_enemy(self, enemy_pos, item_type=None):
         """
-        Spawn a random item from an enemy death.
+        SPAWNAAA ITEMIN VIHOLLISEN KUOLEMISTAPAHTUMASTA.
         
-        Args:
-            enemy_pos: (x, y) position of enemy
-            item_type: Force specific item type, or None for random
+        PARAMETRIT:
+            enemy_pos : VIHOLLISEN (X, Y) SIJAINTI
+            item_type : PAKOTETTU ITEM-TYYPPI TAI None SATUNNAISELLE
         
-        Returns:
-            Item object or None
+        PALAUTTAA:
+            Item-objekti tai None
         """
         if item_type is None:
             # Random based on probabilities
@@ -209,14 +232,14 @@ class ItemSpawner:
 
     def spawn_item_from_boss(self, boss_pos, item_type=None):
         """
-        Spawn an item from a boss. Usually higher-tier items.
+        SPAWNAAA ITEMIN BOSSIN KUOLEMISTAPAHTUMASTA (YLEENSÄ KORKEAMMAN TASON).
         
-        Args:
-            boss_pos: (x, y) position of boss
-            item_type: Force specific item type, or None for boss-tier random
+        PARAMETRIT:
+            boss_pos  : BOSSIN (X, Y) SIJAINTI
+            item_type : PAKOTETTU TYYPPI TAI None BOSSIN SATUNNAISELLE
         
-        Returns:
-            Item object or None
+        PALAUTTAA:
+            Item-objekti tai None
         """
         if item_type is None:
             # Boss prefers larger health items
@@ -234,13 +257,13 @@ class ItemSpawner:
 
     def should_enemy_drop(self, drop_chance=None):
         """
-        Check if enemy should drop item based on configured probability.
+        TARKISTAA PITÄISIKÖ VIHOLLINEN DROPATA ITEMIÄ TODENNÄKÖISYYDEN MUKAAN.
         
-        Args:
-            drop_chance: Override probability (0.0-1.0), or None to use config
+        PARAMETRIT:
+            drop_chance : YLIKIRJOITUS TODENNÄKÖISYYDELLE (0.0-1.0) TAI None
         
-        Returns:
-            bool: True if item should drop
+        PALAUTTAA:
+            bool : True JOS PITÄISI DROPATA
         """
         if drop_chance is None:
             drop_chance = self.config["enemy_drop_chance"]
@@ -248,14 +271,14 @@ class ItemSpawner:
 
     def should_boss_drop(self, boss_id, current_time):
         """
-        Check if boss should drop item based on interval timer.
+        TARKISTAA PITÄISIKÖ BOSSI DROPATA ITEMIÄ AJASTIMEN MUKAAN.
         
-        Args:
-            boss_id: Unique identifier for the boss
-            current_time: Current game time (seconds)
+        PARAMETRIT:
+            boss_id      : BOSSIN YKSITTÄINEN TUNNISTE
+            current_time : NYKYINEN PELIAIKA (SEKUNNIT)
         
-        Returns:
-            bool: True if item should drop now
+        PALAUTTAA:
+            bool : True JOS PITÄISI DROPATA NYT
         """
         if boss_id not in self.boss_drop_timers:
             # Initialize new boss timer
@@ -278,21 +301,21 @@ class ItemSpawner:
         return False
 
     def remove_boss_timer(self, boss_id):
-        """Clean up timer when boss is defeated."""
+        """POISTA BOSSIN AJASTIN KUN BOSSI ON KUKISTETTU."""
         if boss_id in self.boss_drop_timers:
             del self.boss_drop_timers[boss_id]
 
     def update(self, dt, player_rect=None, apply_collection=True):
         """
-        Update all active items and check collection.
+        PÄIVITTÄÄ KAIKKI AKTIIVISET ITEMIT JA TARKISTAA KERÄÄMISEN.
         
-        Args:
-            dt: Delta time (milliseconds)
-            player_rect: pygame.Rect of player for collection detection
-            apply_collection: If True, collect items near player
+        PARAMETRIT:
+            dt               : DELTA-AIKA (MILLISEKUNNIT)
+            player_rect      : PYGAME.RECT PELAAJALLE
+            apply_collection : JOS True, KERÄÄ ITEMIT LÄHELLÄ PELAAJAA
             
-        Returns:
-            List of collected items as (item_type, value) tuples
+        PALAUTTAA:
+            Lista kerityistä itemeista muodossa (item_type, value)
         """
         dt_s = dt / 1000.0
         collected_items = []
@@ -316,7 +339,7 @@ class ItemSpawner:
         return collected_items
 
     def _should_collect(self, item, player_rect):
-        """Check if item should be collected by player."""
+        """TARKISTAA PITÄISIKÖ TÄMÄ ITEM KERÄTÄ PELAAJALLA ETÄISYYDEN MUKAAN."""
         collect_radius = self.config["item_collection_radius"]
         dist = math.sqrt(
             (item.pos[0] - player_rect.centerx) ** 2 +
@@ -325,45 +348,46 @@ class ItemSpawner:
         return dist < collect_radius
 
     def get_item_value(self, item_type):
-        """Get numeric value/effect amount for item type."""
+        """PALAUTTAA ITEMIN NUMEERISEN ARVON TAI EFEKTIN MÄÄRÄN."""
         return self.ITEM_VALUES.get(item_type, 1)
 
     def draw(self, screen, cam_x=0, cam_y=0):
-        """Draw all active items."""
+        """PIIRTÄÄ KAIKKI AKTIIVISET ITEMIT NÄYTÖLLE."""
         for item in self.items:
             item.draw(screen, cam_x, cam_y)
 
     def clear(self):
-        """Remove all active items."""
+        """POISTAA KAIKKI AKTIIVISET ITEMIT."""
         self.items.clear()
 
     def get_all_items(self):
-        """Return list of active items."""
+        """PALAUTTAA LISTAN KAIKISTA AKTIIVISISTA ITEMEISTA."""
         return list(self.items)
 
 
 class Item(pygame.sprite.Sprite):
     """
-    Single collectible item sprite.
+    ITEM - YKSITTÄINEN KERITYVÄI ITEMISPRITE.
     
-    Features:
-    - Spinning animation
-    - Gradual falling (if spawned high)
-    - Fade out near end of life
-    - Auto-collection by player
+    OMINAISUUDET:
+    - AALTOLIIKE YLÖS-ALAS (UPEILEVIA LIIKKEIT)
+    - GRADUELINEN PUTOAMINEN JOS SPAWNATTU KORKEALLE
+    - HÄIPYMINEN ELINIÄN LOPPUPUOLELLA (5 SEKUNTIA)
+    - AUTO-KERÄÄMINEN PELAAJALLA
+    - KATOAA AUTOMAATTISESTI 5 SEKUNNIN JÄLKEEN
     """
 
     def __init__(self, pos, item_type, sprites=None, color=(255, 255, 255), size=24, falling=False):
         """
-        Initialize item.
+        ALUSTAA ITEMIN ANNETULLA SIJAINNILLA JA TYYPILLÄ.
         
-        Args:
-            pos: (x, y) spawn position
-            item_type: Type of item (ItemSpawner.ITEM_*)
-            sprites: List of animation frames (optional)
-            color: RGB color for circle item
-            size: Diameter in pixels
-            falling: If True, item falls down; if False, stays in place (default)
+        PARAMETRIT:
+            pos       : (X, Y) SPAWN-SIJAINTI
+            item_type : ITEMIN TYYPPI (ItemSpawner.ITEM_*)
+            sprites   : ANIMAATION KEHYSTEN LISTA (VALINNAINEN)
+            color     : RGB-VÄRI KIERROKSELLE ITEMILLE
+            size      : HALKAISIJA PIKSELEINÄ
+            falling   : JOS True, ITEM PUTOAA; JOS False, PYSYY PAIKALLA
         """
         super().__init__()
 
@@ -373,11 +397,9 @@ class Item(pygame.sprite.Sprite):
         self.color = color
         self.size = size
         self.lifetime = 0.0
-        self.max_lifetime = 30.0  # Seconds
+        self.max_lifetime = 5.0  # Seconds - items disappear after 5 seconds if not collected
 
         # Animation
-        self.rotation = 0.0
-        self.rotation_speed = 180.0  # Degrees per second
         self.frame_index = 0
         self.anim_timer = 0.0
 
@@ -387,8 +409,9 @@ class Item(pygame.sprite.Sprite):
             self.velocity = pygame.math.Vector2(0, 100)  # Fall speed
         else:
             self.velocity = pygame.math.Vector2(0, 0)  # Float in place
+        self.base_pos_y = self.pos.y  # Store initial Y for wave motion
         self.wobble_offset = 0.0
-        self.wobble_speed = 2.0  # Hz
+        self.wobble_speed = 0.5  # Hz (wave motion frequency)
 
         # Create initial image
         if self.sprites:
@@ -398,25 +421,28 @@ class Item(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=self.pos)
 
     def _create_circle_image(self):
-        """Create a simple circle sprite if no custom sprites available."""
+        """LUO YKSINKERTAISEN SINISEN YMPYRÄN SPRITTEEN JOS MUITA EI SAATAVILLA."""
         surf = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
         pygame.draw.circle(surf, self.color, (self.size // 2, self.size // 2), self.size // 2)
         self.image = surf
 
     def update(self, dt_s):
-        """Update item state."""
+        """
+        PÄIVITTÄÄ ITEMIN TILAN JA KOORDINAATIT.
+        
+        TOIMINNOT:
+        - LASKE AALTOLIIIKKEEN (YLÖS-ALAS) LIIKE-OFFSET
+        - SOVELLA PUTOAMINEN JOS KÄYTÖSSÄ
+        - PÄIVITÄ ANIMAATION KEHYSINDEKSI
+        - PÄIVITÄ RECT-SIJAINNIT
+        """
         self.lifetime += dt_s
 
-        # Gentle wobble during fall
+        # Gentle wave motion (vertical wobble - up and down like on a wave)
         self.wobble_offset = math.sin(self.lifetime * self.wobble_speed * 2 * math.pi) * 20
 
-        # Fall with wobble
-        self.pos.x += self.wobble_offset * dt_s
-        self.pos.y += self.velocity.y * dt_s
-
-        # Rotation
-        self.rotation += self.rotation_speed * dt_s
-        self.rotation %= 360
+        # Apply vertical wave motion and falling
+        self.pos.y = self.base_pos_y + self.wobble_offset + (self.velocity.y * self.lifetime)
 
         # Animation frame update (if using sprite animation)
         if self.sprites:
@@ -430,8 +456,15 @@ class Item(pygame.sprite.Sprite):
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
     def draw(self, screen, cam_x=0, cam_y=0):
-        """Draw item with rotation and fade."""
-        # Simple circle draw with rotation effect
+        """
+        PIIRTÄÄ ITEMIN NÄYTÖLLE HÄIPYMIS-EFEKTILLÄ.
+        
+        OMINAISUUDET:
+        - KAMERAN SIIRTYMÄN HUOMIOINTI
+        - HÄIPYMIS-EFEKTI ELINIÄN LOPPUPUOLELLA (80% JO KADONNUT)
+        - ALFA-KANAVAN SOVELTAMINEN GRAFIIKKAAN
+        """
+        # Screen position with camera offset
         screen_pos = (int(self.pos.x - cam_x), int(self.pos.y - cam_y))
 
         # Fade effect near end of life
@@ -440,15 +473,12 @@ class Item(pygame.sprite.Sprite):
             fade_factor = (self.lifetime - self.max_lifetime * 0.8) / (self.max_lifetime * 0.2)
             alpha = int(255 * (1.0 - fade_factor))
 
-        # Create rotated image
-        if self.sprites:
-            rotated = pygame.transform.rotate(self.image, -self.rotation)
-        else:
-            rotated = pygame.transform.rotate(self.image, -self.rotation)
+        # Draw image without rotation
+        img_to_draw = self.image
 
         # Apply alpha
-        rotated.set_alpha(alpha)
+        img_to_draw.set_alpha(alpha)
 
         # Draw
-        rect = rotated.get_rect(center=screen_pos)
-        screen.blit(rotated, rect.topleft)
+        rect = img_to_draw.get_rect(center=screen_pos)
+        screen.blit(img_to_draw, rect.topleft)
