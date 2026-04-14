@@ -55,10 +55,23 @@ from Meteor.meteor import Meteor
 from Hazards.hazard_system import HazardSystem
 from itemSpawn import ItemSpawner
 from Tasot.Taso1 import spawn_wave_taso1
-from Tasot.Taso2 import spawn_wave_taso2
-from Tasot.Taso3 import spawn_wave_taso3
-from Tasot.TestLevel import spawn_wave_test
-from Tasot.TestLevel2 import spawn_wave_test2
+# Import other level wave-spawn functions as they're created
+try:
+    from Tasot.Taso2 import spawn_wave_taso2
+except ImportError:
+    spawn_wave_taso2 = None
+try:
+    from Tasot.Taso3 import spawn_wave_taso3
+except ImportError:
+    spawn_wave_taso3 = None
+try:
+    from Tasot.TestLevel import spawn_wave_test
+except ImportError:
+    spawn_wave_test = None
+try:
+    from Tasot.TestLevel2 import spawn_wave_test2
+except ImportError:
+    spawn_wave_test2 = None
 
 from States.GameStateManager import GameStateManager
 # ============================================================================
@@ -106,7 +119,10 @@ def apply_hitbox(obj, size=None):
     obj.rect.center = c
     if hasattr(obj, 'pos'):
         obj.pos = pygame.Vector2(obj.rect.center)
-    obj.collision_radius = max(8, int(max(obj.rect.width, obj.rect.height)*0.45))
+    try:
+        obj.collision_radius = max(8, int(max(obj.rect.width, obj.rect.height)*0.45))
+    except Exception:
+        pass
 
 
 # ============================================================================
@@ -191,7 +207,10 @@ class Game:
         self._test2_storm_burst_step_ms = 0
         self.pistejarjestelma = None
         self.leaderboard = Leaderboard()
-        self.leaderboard.load_from_file(DEFAULT_LEADERBOARD_FILE)
+        try:
+            self.leaderboard.load_from_file(DEFAULT_LEADERBOARD_FILE)
+        except FileNotFoundError:
+            pass
 
         # Enemy speed debuff tracking
         self.enemy_speed_debuff_time = 0.0  # Seconds remaining
@@ -221,9 +240,12 @@ class Game:
         env_profile = os.environ.get('RG_PHYSICS_PROFILE', '').strip().lower()
         self.physics_profile_name = env_profile or str(self.user_physics_settings.get('physics_profile', 'balanced')).strip().lower() or 'balanced'
 
-        self.physics_world = Box2DPhysicsWorld(profile_name=self.physics_profile_name)
-        self.physics_metrics['profile'] = self.physics_profile_name
-        self.physics_metrics['fixed_dt'] = self.physics_world.fixed_dt
+        try:
+            self.physics_world = Box2DPhysicsWorld(profile_name=self.physics_profile_name)
+            self.physics_metrics['profile'] = self.physics_profile_name
+            self.physics_metrics['fixed_dt'] = self.physics_world.fixed_dt
+        except Exception:
+            self.physics_world = None
 
         # Lataa tausta ja planeetat
         self._load_assets()
@@ -448,15 +470,29 @@ class Game:
         for h in range(0, 6):
             img_index = 15 + h
             path = os.path.join(health_dir, f"{img_index}.png")
-            img = pygame.image.load(path).convert_alpha()
-            self.health_raw_imgs[h] = img
-            self.health_imgs[h] = pygame.transform.scale(img, self.health_icon_scale_size)
+            try:
+                img = pygame.image.load(path).convert_alpha()
+                self.health_raw_imgs[h] = img
+                self.health_imgs[h] = pygame.transform.scale(img, self.health_icon_scale_size)
+            except Exception:
+                self.health_raw_imgs[h] = None
+                self.health_imgs[h] = None
 
-        # ALUSTA VIHOLLISTEN TERVEYSPALKKIEN KUVAT
-        init_enemy_health_bars(base_path)
+        # Initialize boss/enemy health bar images used by BossEnemy.
+        try:
+            init_enemy_health_bars(base_path)
+        except Exception:
+            try:
+                init_enemy_health_bars()
+            except Exception:
+                pass
 
-        # LATAA EXPLOSION-ANIMAATIOT ENNEN PELIN ALKUA
-        self.explosion_manager.load_all_defaults()
+        # Ensure explosion animations are loaded before gameplay starts.
+        # Without frames, spawn_enemy/spawn_boss are no-ops.
+        try:
+            self.explosion_manager.load_all_defaults()
+        except Exception:
+            pass
 
     # ============================================================================
     # PELAAJAN JA PELIN OBJEKTIEN ALUSTUS
@@ -572,13 +608,21 @@ class Game:
             return
 
         if hasattr(entity, 'vel'):
-            entity.vel = pygame.Vector2(entity.vel) + push
+            try:
+                entity.vel = pygame.Vector2(entity.vel) + push
+            except Exception:
+                pass
 
         if hasattr(entity, 'vx'):
-            entity.vx = float(getattr(entity, 'vx', 0.0)) + float(push.x)
-            
+            try:
+                entity.vx = float(getattr(entity, 'vx', 0.0)) + float(push.x)
+            except Exception:
+                pass
         if hasattr(entity, 'vy'):
-            entity.vy = float(getattr(entity, 'vy', 0.0)) + float(push.y)
+            try:
+                entity.vy = float(getattr(entity, 'vy', 0.0)) + float(push.y)
+            except Exception:
+                pass
 
     def _apply_shockwaves_from_hazards(self, waves):
         """
@@ -866,7 +910,10 @@ class Game:
         c = pygame.Vector2(center)
         r2 = float(radius_px) * float(radius_px)
         for enemy in self.enemies:
-            d2 = (pygame.Vector2(enemy.rect.center) - c).length_squared()
+            try:
+                d2 = (pygame.Vector2(enemy.rect.center) - c).length_squared()
+            except Exception:
+                continue
             if d2 <= r2 and hasattr(enemy, 'hit_player_cooldown'):
                 enemy.hit_player_cooldown = max(float(getattr(enemy, 'hit_player_cooldown', 0.0)), float(cooldown_seconds))
 
@@ -899,7 +946,10 @@ class Game:
         """
         vel = getattr(enemy, 'vel', None)
         if vel is not None:
-            return pygame.Vector2(float(vel.x), float(vel.y))
+            try:
+                return pygame.Vector2(float(vel.x), float(vel.y))
+            except Exception:
+                pass
         vx = float(getattr(enemy, 'vx', 0.0))
         vy = float(getattr(enemy, 'vy', 0.0))
         return pygame.Vector2(vx, vy)
@@ -908,10 +958,13 @@ class Game:
         """
         HAKEE VIHOLLISEN SUUNNAN (GRAPHICS-SUUNTA).
         """
-        ang = float(getattr(enemy, 'display_angle', 0.0))
-        forward = pygame.Vector2(math.cos(ang + math.pi / 2), math.sin(ang + math.pi / 2))
-        if forward.length_squared() > 1e-6:
-            return forward.normalize()
+        try:
+            ang = float(getattr(enemy, 'display_angle', 0.0))
+            forward = pygame.Vector2(math.cos(ang + math.pi / 2), math.sin(ang + math.pi / 2))
+            if forward.length_squared() > 1e-6:
+                return forward.normalize()
+        except Exception:
+            pass
 
         if vel.length_squared() > 1e-6:
             return vel.normalize()
@@ -1250,8 +1303,11 @@ class Game:
                             if enemy.hp <= 0:
                                 self.explosion_manager.spawn_enemy(enemy.rect.center, fps=20)
                                 # SOITA ENEMY EXPLOSION ÄÄNI
-                                if hasattr(pelimusat, 'game_sounds') and pelimusat.game_sounds:
-                                    pelimusat.game_sounds.play_sfx("enemy_explosion")
+                                try:
+                                    if pelimusat.game_sounds:
+                                        pelimusat.game_sounds.play_sfx("enemy_explosion")
+                                except Exception as e:
+                                    print(f"[ROCKEETGAME] ❌ ENEMY EXPLOSION ÄÄNI VIRHE: {e}")
                                 if enemy in self.enemies:
                                     if self.hazard_system is not None:
                                         self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
@@ -1265,8 +1321,11 @@ class Game:
                         else:
                             self.explosion_manager.spawn_enemy(impact_pos, fps=20)
                             # SOITA ENEMY EXPLOSION ÄÄNI
-                            if hasattr(pelimusat, 'game_sounds') and pelimusat.game_sounds:
-                                pelimusat.game_sounds.play_sfx("enemy_explosion")
+                            try:
+                                if pelimusat.game_sounds:
+                                    pelimusat.game_sounds.play_sfx("enemy_explosion")
+                            except Exception as e:
+                                print(f"[ROCKEETGAME] ❌ ENEMY EXPLOSION ÄÄNI VIRHE: {e}")
                     
                             if enemy in self.enemies:
                                 if self.hazard_system is not None:
@@ -1290,8 +1349,11 @@ class Game:
                 if getattr(b, 'dead', False) and b in self.enemy_bullets:
                     self.enemy_bullets.remove(b)
                 self.apply_damage(1)  # Enemy bullet damage (armor first, then health)
-                if hasattr(self.player, 'trigger_hit_animation'):
-                    self.player.trigger_hit_animation()
+                try:
+                    if hasattr(self.player, 'trigger_hit_animation'):
+                        self.player.trigger_hit_animation()
+                except Exception:
+                    pass
 
         if self.hazard_system is None:
             # Legacy meteor collision handling.
@@ -1300,8 +1362,11 @@ class Game:
                 for meteor in self.meteors:
                     if self.player.rect.colliderect(meteor.rect):
                         self.apply_damage(1)  # Meteor damage (armor first, then health)
-                        if hasattr(self.player, 'trigger_hit_animation'):
-                            self.player.trigger_hit_animation()
+                        try:
+                            if hasattr(self.player, 'trigger_hit_animation'):
+                                self.player.trigger_hit_animation()
+                        except Exception:
+                            pass
 
                         # Apply knockback to player
                         player_center = pygame.Vector2(self.player.rect.center)
@@ -1351,8 +1416,11 @@ class Game:
                 # SOITA METEOR_HITS_PLAYER -ÄÄNI KUN PELAAJA OTTAA VAHINKOA
                 if pelimusat.game_sounds:
                     pelimusat.game_sounds.play_sfx("meteor_hits_player")
-                if hasattr(self.player, 'trigger_hit_animation'):
-                    self.player.trigger_hit_animation()
+                try:
+                    if hasattr(self.player, 'trigger_hit_animation'):
+                        self.player.trigger_hit_animation()
+                except Exception:
+                    pass
 
             hp_pickups = int(hazard_effects.get("pickup_hp", 0))
             if hp_pickups > 0:
@@ -1419,8 +1487,11 @@ class Game:
                 if self.player.rect.colliderect(enemy.rect):
                     self.apply_damage(1)  # Enemy contact damage (armor first, then health)
 
-                    if hasattr(self.player, 'trigger_hit_animation'):
-                        self.player.trigger_hit_animation()
+                    try:
+                        if hasattr(self.player, 'trigger_hit_animation'):
+                            self.player.trigger_hit_animation()
+                    except Exception:
+                        pass
 
                     player_center = pygame.Vector2(self.player.rect.center)
                     enemy_center = pygame.Vector2(enemy.rect.center)
@@ -1446,8 +1517,11 @@ class Game:
                     if not isinstance(enemy, BossEnemy):
                         self.explosion_manager.spawn_enemy(enemy.rect.center, fps=22)
                         # SOITA ENEMY EXPLOSION ÄÄNI
-                        if hasattr(pelimusat, 'game_sounds') and pelimusat.game_sounds:
-                            pelimusat.game_sounds.play_sfx("enemy_explosion")
+                        try:
+                            if pelimusat.game_sounds:
+                                pelimusat.game_sounds.play_sfx("enemy_explosion")
+                        except Exception as e:
+                            print(f"[ROCKEETGAME] ❌ ENEMY EXPLOSION ÄÄNI VIRHE: {e}")
                         if enemy in self.enemies:
                             if self.hazard_system is not None:
                                 self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
@@ -1514,13 +1588,16 @@ class Game:
                 destroyed_total_ms + 180,
             )
 
-            print(
-                f"[DEATH DEBUG] destroyed_frames={destroyed_count}, "
-                f"destroyed_frame_ms={destroyed_speed_ms}, "
-                f"player_explosion_frames=0, "
-                f"player_explosion_fps=0, "
-                f"hold_ms={self.player_death_menu_delay_remaining}"
-            )
+            try:
+                print(
+                    f"[DEATH DEBUG] destroyed_frames={destroyed_count}, "
+                    f"destroyed_frame_ms={destroyed_speed_ms}, "
+                    f"player_explosion_frames=0, "
+                    f"player_explosion_fps=0, "
+                    f"hold_ms={self.player_death_menu_delay_remaining}"
+                )
+            except Exception:
+                pass
 
         # Räjähdykset
         self.explosion_manager.update(self.dt)
@@ -1564,8 +1641,11 @@ class Game:
                         print(f"[NUKE DEBUG] NUKE ACTIVATED! Enemies before: {len(self.enemies)}, Boss: {self.boss is not None}")
                         for enemy in list(self.enemies):
                             self.explosion_manager.spawn_enemy(enemy.rect.center, fps=20)
-                            if hasattr(pelimusat, 'game_sounds') and pelimusat.game_sounds:
-                                pelimusat.game_sounds.play_sfx("enemy_explosion")
+                            try:
+                                if pelimusat.game_sounds:
+                                    pelimusat.game_sounds.play_sfx("enemy_explosion")
+                            except Exception:
+                                pass
                             if self.hazard_system is not None:
                                 self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
                             self.enemies.remove(enemy)
